@@ -5,13 +5,13 @@ Categories:
   - Connectivity
 License: GPL-3.0-only
 AuthorName: kerstz
-SourceCode: https://github.com/kerstz/edge2-remote
-IssueTracker: https://github.com/kerstz/edge2-remote/issues
+SourceCode: https://github.com/kerstz/lovense-remote
+IssueTracker: https://github.com/kerstz/lovense-remote/issues
 
 AntiFeatures:
   - NonFreeNet
 
-AutoName: Edge2 Remote
+AutoName: Lovense Remote
 Summary: Direct-Bluetooth remote for Lovense toys
 Description: |-
   Control Lovense toys directly over Bluetooth LE, without the Lovense app, an
@@ -31,7 +31,7 @@ Description: |-
   the NonFreeNet anti-feature. Not affiliated with Lovense.
 
 RepoType: git
-Repo: https://github.com/kerstz/edge2-remote.git
+Repo: https://github.com/kerstz/lovense-remote.git
 
 Builds:
   - versionName: 0.1.0
