@@ -23,6 +23,8 @@
     <string name="preset_soft">Soft</string>
     <string name="preset_medium">Medium</string>
     <string name="preset_strong">Strong</string>
+    <string name="controlled_title">You\'re being controlled</string>
+    <string name="controlled_count">%1$d connected · relayed over BLE</string>
     <string name="patterns_header">PRESETS</string>
     <string name="playing_stop">PLAYING · STOP</string>
     <string name="actuator_reverse">⟲ dir</string>
@@ -42,6 +44,11 @@
     <string name="share_none">No WiFi detected and tunnel not configured. Connect to WiFi, or set RelayConfig.BASE_URL.</string>
     <string name="share_warn">While this share is open, whoever has the link controls the toy.</string>
     <string name="qr_desc">Control link QR code</string>
+    <string name="action_copy">Copy</string>
+    <string name="action_send">Send</string>
+    <string name="link_copied">Link copied</string>
+    <string name="share_blocked">Sharing failed: network is blocked for the app (check network permission / firewall).</string>
+    <string name="share_via">Share link</string>
 
     <!-- Pattern import -->
     <string name="import_title">Import a Lovense pattern</string>

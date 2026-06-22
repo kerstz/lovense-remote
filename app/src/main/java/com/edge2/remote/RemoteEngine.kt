@@ -7,10 +7,10 @@ import com.edge2.remote.ble.Edge2BleManager
 import com.edge2.remote.pattern.LovenseImporter
 import com.edge2.remote.pattern.Pattern
 import com.edge2.remote.pattern.PatternPlayer
-import com.edge2.remote.remote.CloudflaredTunnel
 import com.edge2.remote.remote.NetworkUtils
 import com.edge2.remote.remote.RemoteCommand
 import com.edge2.remote.remote.RemoteServer
+import com.edge2.remote.remote.SshTunnel
 import com.edge2.remote.service.AppActions
 import com.edge2.remote.service.RemoteForegroundService
 import kotlinx.coroutines.CoroutineScope
@@ -40,13 +40,16 @@ class RemoteEngine private constructor(context: Context) {
     private val player = PatternPlayer(ble, scope)
     private val importer = LovenseImporter()
     private val server = RemoteServer(appContext.assets) { cmd -> applyRemote(cmd) }
-    private val cloudflared = CloudflaredTunnel(appContext, scope)
+    private val tunnel = SshTunnel(scope)
 
     // --- État exposé -----------------------------------------------------
     val connectionState = ble.connectionState
     val actuatorLevels = ble.actuatorLevels
     val discovered = ble.discovered
     val playing: StateFlow<String?> = player.playing
+
+    /** Nombre de contrôleurs distants connectés (>0 = « on te contrôle »). */
+    val controllers: StateFlow<Int> = server.controllers
 
     private val _linkMode = MutableStateFlow(false)
     val linkMode: StateFlow<Boolean> = _linkMode.asStateFlow()
@@ -65,9 +68,13 @@ class RemoteEngine private constructor(context: Context) {
     private val _tunnelConnected = MutableStateFlow(false)
     val tunnelConnected: StateFlow<Boolean> = _tunnelConnected.asStateFlow()
 
-    /** true tant que le tunnel internet se prépare (binaire dispo, URL pas encore). */
+    /** true tant que le tunnel internet se prépare (URL pas encore prête). */
     private val _tunnelPreparing = MutableStateFlow(false)
     val tunnelPreparing: StateFlow<Boolean> = _tunnelPreparing.asStateFlow()
+
+    /** true si le partage a échoué (réseau bloqué pour l'app). */
+    private val _shareError = MutableStateFlow(false)
+    val shareError: StateFlow<Boolean> = _shareError.asStateFlow()
 
     private val _importedPatterns = MutableStateFlow<List<Pattern>>(emptyList())
     val importedPatterns: StateFlow<List<Pattern>> = _importedPatterns.asStateFlow()
@@ -86,9 +93,9 @@ class RemoteEngine private constructor(context: Context) {
                 else RemoteForegroundService.stop(appContext)
             }
         }
-        // Quand cloudflared publie l'URL publique → lien internet prêt.
+        // Quand le tunnel publie l'URL publique → lien internet prêt.
         scope.launch {
-            cloudflared.publicUrl.collect { url ->
+            tunnel.publicUrl.collect { url ->
                 if (url != null && _sharing.value) {
                     _tunnelUrl.value = "$url/s/${server.sessionId}"
                     _tunnelConnected.value = true
@@ -131,26 +138,29 @@ class RemoteEngine private constructor(context: Context) {
     }
 
     fun startSharing() {
-        server.start()
+        // Réseau bloqué (pare-feu / autorisation coupée) → on n'amorce rien (pas de crash).
+        if (!server.start()) { _shareError.value = true; return }
+        _shareError.value = false
         _sharing.value = true
         // LAN (Wi-Fi/Ethernet seulement ; null en 4G).
         val ip = NetworkUtils.lanIpv4()
         _shareUrl.value = ip?.let { "http://$it:${server.port}/s/${server.sessionId}" }
-        // Tunnel internet via cloudflared → marche en 4G. URL prête en quelques s.
-        if (cloudflared.available) {
+        // Tunnel internet (SSH/localhost.run) → marche en 4G. URL prête en quelques s.
+        if (tunnel.available) {
             _tunnelPreparing.value = true
-            cloudflared.start(server.port)
+            tunnel.start(server.port)
         }
     }
 
     fun stopSharing() {
-        cloudflared.stop()
+        tunnel.stop()
         server.stop()
         _sharing.value = false
         _shareUrl.value = null
         _tunnelUrl.value = null
         _tunnelConnected.value = false
         _tunnelPreparing.value = false
+        _shareError.value = false
     }
 
     fun importFromUrl(url: String) {
