@@ -5,7 +5,6 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.edge2.remote.ble.DiscoveredToy
 import com.edge2.remote.ble.Edge2BleManager
-import com.edge2.remote.ble.Motor
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import com.edge2.remote.pattern.LovenseImporter
@@ -30,7 +29,9 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
     private val player = PatternPlayer(ble, viewModelScope)
 
     val connectionState = ble.connectionState
-    val motorLevels = ble.motorLevels
+
+    /** Niveau courant de chaque actionneur du toy connecté (feedback UI). */
+    val actuatorLevels = ble.actuatorLevels
 
     /** Toys Lovense visibles pendant le scan (sélection à la connexion). */
     val discovered = ble.discovered
@@ -75,16 +76,18 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
         _tunnelUrl.value = null
     }
 
-    /** Applique une commande reçue d'un contrôleur distant (web ou app). */
+    /**
+     * Applique une commande reçue d'un contrôleur distant. Les index M1/M2 du
+     * protocole texte mappent les actionneurs 0/1 du toy (pour les toys mono-
+     * actionneur, M2 est simplement ignoré).
+     */
     private fun applyRemote(cmd: RemoteCommand) {
         player.cancel()
         when (cmd) {
-            is RemoteCommand.SetMotor ->
-                Motor.entries.firstOrNull { it.index == cmd.index }
-                    ?.let { ble.setMotor(it, cmd.level) }
+            is RemoteCommand.SetMotor -> ble.setActuator(cmd.index - 1, cmd.level)
             is RemoteCommand.SetBoth -> {
-                ble.setMotor(Motor.BASE, cmd.level)
-                ble.setMotor(Motor.SHAFT, cmd.level)
+                ble.setActuator(0, cmd.level)
+                ble.setActuator(1, cmd.level)
             }
             RemoteCommand.Stop -> ble.stopAll()
         }
@@ -100,24 +103,26 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
 
     fun toggleLink() { _linkMode.value = !_linkMode.value }
 
-    /** Réglage manuel d'un moteur (fraction 0..1). Interrompt un pattern en cours. */
-    fun setMotor(motor: Motor, fraction: Float) {
+    /** Réglage manuel d'un actionneur (fraction 0..1). Interrompt un pattern. */
+    fun setActuator(index: Int, fraction: Float) {
         player.cancel()
-        ble.setMotor(motor, fraction)
+        ble.setActuatorFraction(index, fraction)
     }
 
-    /** Réglage manuel des deux moteurs à la même valeur (mode Link / presets). */
+    /** Inverse le sens d'un actionneur rotatif (Nora). */
+    fun reverse(index: Int) = ble.reverse(index)
+
+    /** Réglage de tous les actionneurs à la même valeur (mode Link / presets). */
     fun setBoth(fraction: Float) {
         player.cancel()
-        ble.setMotor(Motor.BASE, fraction)
-        ble.setMotor(Motor.SHAFT, fraction)
+        ble.setAllFraction(fraction)
     }
 
-    /** Réglage du pad XY : base et tige indépendants (interrompt un pattern). */
+    /** Pad XY : actionneur 0 (base) et 1 (tige) indépendants. Interrompt un pattern. */
     fun setXY(base: Float, tige: Float) {
         player.cancel()
-        ble.setMotor(Motor.BASE, base)
-        ble.setMotor(Motor.SHAFT, tige)
+        ble.setActuatorFraction(0, base)
+        ble.setActuatorFraction(1, tige)
     }
 
     fun playPattern(pattern: Pattern) = player.play(pattern)

@@ -1,7 +1,6 @@
 package com.edge2.remote.pattern
 
 import com.edge2.remote.ble.Edge2BleManager
-import com.edge2.remote.ble.Motor
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -33,8 +32,9 @@ class PatternPlayer(
             do {
                 for (step in pattern.steps) {
                     if (!isActive) break
-                    ble.setMotor(Motor.BASE, step.m1)
-                    ble.setMotor(Motor.SHAFT, step.m2)
+                    // m1/m2 → actionneurs 0/1 (ignoré si le toy en a moins).
+                    ble.setActuator(0, step.m1)
+                    ble.setActuator(1, step.m2)
                     delay(step.durationMs.coerceAtLeast(10))
                 }
             } while (pattern.loop && isActive)

@@ -14,21 +14,20 @@ sealed interface ConnectionState {
     /** Toy trouvé, connexion GATT + découverte services + handshake en cours. */
     data object Connecting : ConnectionState
 
-    /** Prêt à piloter. [deviceName] = nom BLE, [battery] = % batterie (null si inconnu). */
+    /**
+     * Prêt à piloter. [toy] = modèle détecté (→ actionneurs + UI adaptée),
+     * [battery] = % batterie (null si inconnu).
+     */
     data class Connected(
-        val deviceName: String,
+        val toy: ToyType,
         val battery: Int? = null,
-    ) : ConnectionState
+    ) : ConnectionState {
+        val deviceName: String get() = toy.displayName
+    }
 
     /** Échec (timeout scan, GATT error, permission manquante…). */
     data class Error(val reason: String) : ConnectionState
 }
-
-/** Intensités courantes des deux moteurs (0..20), pour le feedback UI. */
-data class MotorLevels(
-    val base: Int = 0,
-    val shaft: Int = 0,
-)
 
 /**
  * Un toy Lovense repéré pendant le scan (avant connexion). La liste de ces

@@ -51,6 +51,9 @@ import kotlinx.coroutines.withTimeoutOrNull
  *
  * Le contexte appelant doit détenir BLUETOOTH_SCAN + BLUETOOTH_CONNECT.
  */
+/** Nombre max d'actionneurs gérés (le toy le plus complexe en a ~3). */
+private const val MAX_ACTUATORS = 4
+
 @SuppressLint("MissingPermission")
 class Edge2BleManager(context: Context) {
 
@@ -66,8 +69,9 @@ class Edge2BleManager(context: Context) {
     private val _connectionState = MutableStateFlow<ConnectionState>(ConnectionState.Disconnected)
     val connectionState: StateFlow<ConnectionState> = _connectionState.asStateFlow()
 
-    private val _motorLevels = MutableStateFlow(MotorLevels())
-    val motorLevels: StateFlow<MotorLevels> = _motorLevels.asStateFlow()
+    /** Niveau courant de chaque actionneur du toy connecté (feedback UI). */
+    private val _actuatorLevels = MutableStateFlow<List<Int>>(emptyList())
+    val actuatorLevels: StateFlow<List<Int>> = _actuatorLevels.asStateFlow()
 
     /** Toys Lovense visibles pendant le scan (pour la sélection à la connexion). */
     private val _discovered = MutableStateFlow<List<DiscoveredToy>>(emptyList())
@@ -78,7 +82,8 @@ class Edge2BleManager(context: Context) {
     private var gatt: BluetoothGatt? = null
     private var tx: BluetoothGattCharacteristic? = null
     private var rx: BluetoothGattCharacteristic? = null
-    private var deviceName: String = "Lovense"
+    /** Modèle détecté (→ actionneurs). Deviné au nom BLE puis affiné via `DeviceType;`. */
+    private var toy: ToyType = ToyRegistry.generic
     /** Toy choisi par l'utilisateur (pour reconnexion auto sur le bon appareil). */
     private var chosenDevice: BluetoothDevice? = null
 
@@ -91,9 +96,11 @@ class Edge2BleManager(context: Context) {
     private var servicesDeferred: CompletableDeferred<Boolean>? = null
     private var descriptorDeferred: CompletableDeferred<Boolean>? = null
 
-    // File d'écriture : intensité désirée par moteur (index 0 → Vibrate1).
-    private val desired = AtomicIntegerArray(Motor.entries.size)
-    private val lastSent = IntArray(Motor.entries.size) { -1 }
+    // File d'écriture : intensité désirée par actionneur (index = position dans
+    // toy.actuators). Taille max fixe ; seuls les premiers `toy.actuators.size`
+    // indices sont actifs.
+    private val desired = AtomicIntegerArray(MAX_ACTUATORS)
+    private val lastSent = IntArray(MAX_ACTUATORS) { -1 }
     private val writeSignal = Channel<Unit>(Channel.CONFLATED)
     private val writeMutex = Mutex()
     private var writeAck: CompletableDeferred<Boolean>? = null
@@ -129,7 +136,8 @@ class Edge2BleManager(context: Context) {
         val a = adapter ?: return
         userDisconnect = false
         reconnectAttempts = 0
-        deviceName = toy.displayName
+        // Devine le modèle au nom BLE ; affiné via DeviceType après connexion.
+        this.toy = ToyRegistry.byBleName(toy.bleName)
         stopScan()
         val device = runCatching { a.getRemoteDevice(toy.address) }.getOrNull() ?: run {
             _connectionState.value = ConnectionState.Error("Appareil introuvable")
@@ -147,26 +155,43 @@ class Edge2BleManager(context: Context) {
             teardownGatt()
             chosenDevice = null
             _connectionState.value = ConnectionState.Disconnected
-            _motorLevels.value = MotorLevels()
+            _actuatorLevels.value = emptyList()
             _discovered.value = emptyList()
         }
     }
 
-    /** Règle un moteur à une intensité [0..20]. */
-    fun setMotor(motor: Motor, intensity: Int) {
-        desired.set(motor.index - 1, LovenseProtocol.clamp(intensity))
+    /** Règle l'actionneur [index] (position dans `toy.actuators`) à un niveau brut. */
+    fun setActuator(index: Int, level: Int) {
+        val act = toy.actuators.getOrNull(index) ?: return
+        desired.set(index, level.coerceIn(0, act.max))
         writeSignal.trySend(Unit)
     }
 
-    /** Règle un moteur à partir d'une fraction UI [0f..1f]. */
-    fun setMotor(motor: Motor, fraction: Float) =
-        setMotor(motor, LovenseProtocol.fractionToLevel(fraction))
+    /** Règle l'actionneur [index] à partir d'une fraction UI [0f..1f]. */
+    fun setActuatorFraction(index: Int, fraction: Float) {
+        val act = toy.actuators.getOrNull(index) ?: return
+        setActuator(index, LovenseProtocol.fractionToLevel(fraction, act.max))
+    }
 
-    /** Arrête les deux moteurs. */
+    /** Règle TOUS les actionneurs à la même fraction (presets / mode Link). */
+    fun setAllFraction(fraction: Float) {
+        toy.actuators.indices.forEach { setActuatorFraction(it, fraction) }
+    }
+
+    /** Inverse le sens d'un actionneur rotatif (Nora) — `RotateChange;`. */
+    fun reverse(index: Int) {
+        if (toy.actuators.getOrNull(index)?.reversible != true) return
+        scope.launch { writeCommand(LovenseProtocol.rotateChange()) }
+    }
+
+    /** Arrête tous les actionneurs. */
     fun stopAll() {
-        Motor.entries.forEach { desired.set(it.index - 1, 0) }
+        toy.actuators.indices.forEach { desired.set(it, 0) }
         writeSignal.trySend(Unit)
     }
+
+    /** Actionneurs du toy connecté (pour l'UI adaptative). */
+    val actuators: List<Actuator> get() = toy.actuators
 
     /** À appeler quand le manager n'est plus utilisé (ex. onDestroy). */
     fun release() {
@@ -290,7 +315,7 @@ class Edge2BleManager(context: Context) {
         if (!enableNotifications(g, endpoints.rx)) { fail("Activation notifications échouée"); return }
 
         // 5. Connecté : on peut piloter. Démarre la boucle d'écriture.
-        _connectionState.value = ConnectionState.Connected(deviceName)
+        _connectionState.value = ConnectionState.Connected(toy)
         resetWriteState()
         startWriterLoop()
 
@@ -316,9 +341,18 @@ class Edge2BleManager(context: Context) {
     private fun handleNotification(bytes: ByteArray) {
         when (val reply = LovenseProtocol.parseReply(bytes)) {
             is LovenseProtocol.Reply.Battery -> updateBattery(reply.percent)
-            is LovenseProtocol.Reply.DeviceType -> { /* modèle confirmé, rien à faire */ }
+            is LovenseProtocol.Reply.DeviceType ->
+                // Code type fiable → on affine le modèle (et donc les actionneurs).
+                ToyRegistry.byDeviceCode(reply.model)?.let { applyToy(it) }
             else -> { /* OK; / inconnu : ignoré */ }
         }
+    }
+
+    /** Applique un modèle détecté : ré-init des actionneurs + maj de l'état. */
+    private fun applyToy(t: ToyType) {
+        toy = t
+        resetWriteState()
+        _connectionState.update { st -> if (st is ConnectionState.Connected) st.copy(toy = t) else st }
     }
 
     private fun updateBattery(percent: Int) {
@@ -364,7 +398,7 @@ class Edge2BleManager(context: Context) {
     private fun resetWriteState() {
         for (i in 0 until desired.length()) desired.set(i, 0)
         lastSent.fill(-1)
-        _motorLevels.value = MotorLevels()
+        _actuatorLevels.value = List(toy.actuators.size) { 0 }
     }
 
     private fun startWriterLoop() {
@@ -376,11 +410,10 @@ class Edge2BleManager(context: Context) {
                 var progressed = true
                 while (progressed) {
                     progressed = false
-                    for (motor in Motor.entries) {
-                        val i = motor.index - 1
+                    for (i in toy.actuators.indices) {
                         val target = desired.get(i)
                         if (target != lastSent[i]) {
-                            if (writeCommand(LovenseProtocol.vibrate(motor, target))) {
+                            if (writeCommand(LovenseProtocol.actuatorCommand(toy.actuators[i].kind, target))) {
                                 lastSent[i] = target
                                 progressed = true
                                 publishLevels()
@@ -397,10 +430,7 @@ class Edge2BleManager(context: Context) {
     }
 
     private fun publishLevels() {
-        _motorLevels.value = MotorLevels(
-            base = lastSent[Motor.BASE.index - 1].coerceAtLeast(0),
-            shaft = lastSent[Motor.SHAFT.index - 1].coerceAtLeast(0),
-        )
+        _actuatorLevels.value = toy.actuators.indices.map { lastSent[it].coerceAtLeast(0) }
     }
 
     /** Écrit une commande sur TX, sérialisée, et attend l'ACK GATT. */

@@ -23,11 +23,14 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -45,8 +48,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.edge2.remote.RemoteViewModel
+import com.edge2.remote.ble.ActuatorKind
 import com.edge2.remote.ble.ConnectionState
-import com.edge2.remote.ble.Motor
+import com.edge2.remote.ble.ToyRegistry
+import com.edge2.remote.ble.ToyType
 import com.edge2.remote.pattern.BuiltinPatterns
 import com.edge2.remote.pattern.Pattern
 import com.edge2.remote.remote.NetworkUtils
@@ -56,36 +61,26 @@ import kotlin.math.roundToInt
 import kotlin.math.sin
 
 /**
- * Écran principal (toy connecté) — design `Edge2 Remote.dc.html` : pad XY pour
- * piloter les deux moteurs d'un pouce, readouts BASE/TIGE, patterns, Link + presets.
+ * Écran principal (toy connecté) — design `Edge2 Remote.dc.html`, **adaptatif**
+ * selon les actionneurs du toy : pad XY pour les toys à 2 vibreurs (Edge), sinon
+ * un slider étiqueté par actionneur (vibration / rotation / succion).
  */
 @Composable
 fun RemoteScreen(vm: RemoteViewModel, onDisconnect: () -> Unit) {
     val c = Edge2.colors
     val state by vm.connectionState.collectAsStateWithLifecycle()
-    val link by vm.linkMode.collectAsStateWithLifecycle()
     val playing by vm.playing.collectAsStateWithLifecycle()
-    val levels by vm.motorLevels.collectAsStateWithLifecycle()
+    val levels by vm.actuatorLevels.collectAsStateWithLifecycle()
     val shareUrl by vm.shareUrl.collectAsStateWithLifecycle()
     val tunnelUrl by vm.tunnelUrl.collectAsStateWithLifecycle()
     val tunnelConnected by vm.tunnelConnected.collectAsStateWithLifecycle()
     val imported by vm.importedPatterns.collectAsStateWithLifecycle()
 
-    val battery = (state as? ConnectionState.Connected)?.battery
+    val connected = state as? ConnectionState.Connected
+    val toy = connected?.toy ?: ToyRegistry.generic
+    val battery = connected?.battery
     var shareOpen by remember { mutableStateOf(false) }
     var importOpen by remember { mutableStateOf(false) }
-
-    // Drag manuel = source de vérité ; pendant un pattern, on suit les moteurs réels.
-    var localBase by remember { mutableFloatStateOf(0f) }
-    var localTige by remember { mutableFloatStateOf(0f) }
-    val baseF = if (playing != null) levels.base / 20f else localBase
-    val tigeF = if (playing != null) levels.shaft / 20f else localTige
-
-    fun applyXY(x: Float, y: Float) {
-        if (link) { val m = (x + y) / 2f; localBase = m; localTige = m; vm.setXY(m, m) }
-        else { localBase = x; localTige = y; vm.setXY(x, y) }
-    }
-    fun preset(f: Float) { localBase = f; localTige = f; vm.setBoth(f) }
 
     Column(
         modifier = Modifier
@@ -97,7 +92,7 @@ fun RemoteScreen(vm: RemoteViewModel, onDisconnect: () -> Unit) {
         // --- En-tête : appareil + état + batterie + actions partage --------
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Column {
-                Text("Edge 2", color = c.ink, fontWeight = FontWeight.Bold, fontSize = 21.sp)
+                Text(toy.displayName, color = c.ink, fontWeight = FontWeight.Bold, fontSize = 21.sp)
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Box(Modifier.size(7.dp).clip(CircleShape).background(c.live))
                     Text("Connecté · BLE direct", color = c.live, fontSize = 11.sp, fontWeight = FontWeight.Medium)
@@ -116,24 +111,14 @@ fun RemoteScreen(vm: RemoteViewModel, onDisconnect: () -> Unit) {
             }
         }
 
-        Text(
-            "Glisse le point — horizontal = base · vertical = tige",
-            color = c.muted, fontSize = 11.sp, modifier = Modifier.fillMaxWidth(),
-        )
-
-        // --- Pad XY (signature) --------------------------------------------
-        XYPad(
-            base = baseF, tige = tigeF, onChange = ::applyXY,
-            modifier = Modifier.fillMaxWidth().aspectRatio(1f),
-        )
-
-        // --- Readouts BASE / TIGE ------------------------------------------
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(11.dp)) {
-            Readout("BASE", c.base, (baseF * 100).roundToInt())
-            Readout("TIGE", c.tige, (tigeF * 100).roundToInt())
+        // --- Contrôle adapté au toy ----------------------------------------
+        if (toy.isDualVibrate) {
+            DualVibrateControls(vm, playing != null, levels)
+        } else {
+            ActuatorControls(vm, toy, playing != null, levels)
         }
 
-        // --- Patterns pré-enregistrés --------------------------------------
+        // --- Patterns pré-enregistrés (pilotent les actionneurs 0/1) -------
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Text("PRÉ-ENREGISTRÉ", color = c.faint, fontWeight = FontWeight.SemiBold, fontSize = 10.sp, letterSpacing = 2.5.sp)
             if (playing != null) {
@@ -155,14 +140,6 @@ fun RemoteScreen(vm: RemoteViewModel, onDisconnect: () -> Unit) {
             }
             PatternChip("+ Lovense", -1, false, Modifier.weight(1f)) { importOpen = true }
         }
-
-        // --- Link + presets -------------------------------------------------
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(9.dp), verticalAlignment = Alignment.CenterVertically) {
-            LinkToggle(link) { vm.toggleLink() }
-            PresetButton("Doux", Modifier.weight(1f)) { preset(0.30f) }
-            PresetButton("Moyen", Modifier.weight(1f)) { preset(0.60f) }
-            PresetButton("Fort", Modifier.weight(1f)) { preset(0.90f) }
-        }
     }
 
     if (shareOpen) {
@@ -173,6 +150,106 @@ fun RemoteScreen(vm: RemoteViewModel, onDisconnect: () -> Unit) {
             onImportUrl = { vm.importFromUrl(it); importOpen = false },
             onImportText = { vm.importFromText(it); importOpen = false },
             onDismiss = { importOpen = false },
+        )
+    }
+}
+
+/** Toys à 2 vibreurs (Edge, Gemini, Hyphy) : pad XY + readouts + Link + presets. */
+@Composable
+private fun DualVibrateControls(vm: RemoteViewModel, playing: Boolean, levels: List<Int>) {
+    val c = Edge2.colors
+    val link by vm.linkMode.collectAsStateWithLifecycle()
+    // Drag manuel = vérité ; pendant un pattern, on suit les moteurs réels.
+    var localBase by remember { mutableFloatStateOf(0f) }
+    var localTige by remember { mutableFloatStateOf(0f) }
+    val baseF = if (playing) levels.getOrElse(0) { 0 } / 20f else localBase
+    val tigeF = if (playing) levels.getOrElse(1) { 0 } / 20f else localTige
+
+    fun applyXY(x: Float, y: Float) {
+        if (link) { val m = (x + y) / 2f; localBase = m; localTige = m; vm.setXY(m, m) }
+        else { localBase = x; localTige = y; vm.setXY(x, y) }
+    }
+    fun preset(f: Float) { localBase = f; localTige = f; vm.setBoth(f) }
+
+    Text("Glisse le point — horizontal = base · vertical = tige", color = c.muted, fontSize = 11.sp, modifier = Modifier.fillMaxWidth())
+    XYPad(base = baseF, tige = tigeF, onChange = ::applyXY, modifier = Modifier.fillMaxWidth().aspectRatio(1f))
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(11.dp)) {
+        Readout("BASE", c.base, (baseF * 100).roundToInt())
+        Readout("TIGE", c.tige, (tigeF * 100).roundToInt())
+    }
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(9.dp), verticalAlignment = Alignment.CenterVertically) {
+        LinkToggle(link) { vm.toggleLink() }
+        PresetButton("Doux", Modifier.weight(1f)) { preset(0.30f) }
+        PresetButton("Moyen", Modifier.weight(1f)) { preset(0.60f) }
+        PresetButton("Fort", Modifier.weight(1f)) { preset(0.90f) }
+    }
+}
+
+/** Autres toys : un slider étiqueté par actionneur (+ bouton sens pour la rotation). */
+@Composable
+private fun ActuatorControls(vm: RemoteViewModel, toy: ToyType, playing: Boolean, levels: List<Int>) {
+    val c = Edge2.colors
+    val local = remember(toy) { mutableStateListOf<Float>().apply { repeat(toy.actuators.size) { add(0f) } } }
+
+    Text("Règle chaque moteur du ${toy.displayName}.", color = c.muted, fontSize = 11.sp, modifier = Modifier.fillMaxWidth())
+    toy.actuators.forEachIndexed { i, act ->
+        val accent = when (act.kind) {
+            ActuatorKind.VIBRATE, ActuatorKind.VIBRATE1 -> c.base
+            ActuatorKind.VIBRATE2, ActuatorKind.ROTATE -> c.tige
+            ActuatorKind.AIR -> c.live
+        }
+        val value = if (playing && i < levels.size) levels[i] / act.max.toFloat() else local.getOrElse(i) { 0f }
+        ActuatorSlider(
+            label = act.label, accent = accent, fraction = value, percent = (value * 100).roundToInt(),
+            reversible = act.reversible, onReverse = { vm.reverse(i) },
+            onChange = { f -> if (i < local.size) local[i] = f; vm.setActuator(i, f) },
+        )
+    }
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+        fun all(f: Float) { for (i in local.indices) local[i] = f; vm.setBoth(f) }
+        PresetButton("Doux", Modifier.weight(1f)) { all(0.30f) }
+        PresetButton("Moyen", Modifier.weight(1f)) { all(0.60f) }
+        PresetButton("Fort", Modifier.weight(1f)) { all(0.90f) }
+    }
+}
+
+@Composable
+private fun ActuatorSlider(
+    label: String,
+    accent: Color,
+    fraction: Float,
+    percent: Int,
+    reversible: Boolean,
+    onReverse: () -> Unit,
+    onChange: (Float) -> Unit,
+) {
+    val c = Edge2.colors
+    Column(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(15.dp))
+            .background(accent.copy(alpha = .08f))
+            .border(1.dp, accent.copy(alpha = .25f), RoundedCornerShape(15.dp))
+            .padding(horizontal = 15.dp, vertical = 11.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Text(label.uppercase(), color = accent, fontWeight = FontWeight.SemiBold, fontSize = 10.sp, letterSpacing = 2.sp)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                if (reversible) {
+                    Text(
+                        "⟲ sens", color = accent, fontWeight = FontWeight.SemiBold, fontSize = 11.sp,
+                        modifier = Modifier.clip(RoundedCornerShape(9.dp)).border(1.dp, accent.copy(alpha = .4f), RoundedCornerShape(9.dp))
+                            .clickable { onReverse() }.padding(horizontal = 9.dp, vertical = 4.dp),
+                    )
+                }
+                Row(verticalAlignment = Alignment.Bottom) {
+                    Text("$percent", color = c.ink, fontFamily = JetBrainsMono, fontWeight = FontWeight.Bold, fontSize = 20.sp)
+                    Text("%", color = c.muted, fontFamily = JetBrainsMono, fontSize = 12.sp, modifier = Modifier.padding(bottom = 2.dp))
+                }
+            }
+        }
+        Slider(
+            value = fraction.coerceIn(0f, 1f), onValueChange = onChange,
+            colors = SliderDefaults.colors(thumbColor = accent, activeTrackColor = accent, inactiveTrackColor = c.outline),
         )
     }
 }

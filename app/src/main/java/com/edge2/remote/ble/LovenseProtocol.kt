@@ -46,25 +46,33 @@ object LovenseProtocol {
     /** `Battery;` — interroge le niveau de batterie. */
     fun battery(): ByteArray = "Battery;".toByteArray(Charsets.US_ASCII)
 
-    /** `VibrateN:n;` — règle UN moteur. [intensity] est borné à [0..20]. */
-    fun vibrate(motor: Motor, intensity: Int): ByteArray =
-        "Vibrate${motor.index}:${clamp(intensity)};".toByteArray(Charsets.US_ASCII)
-
-    /** `Vibrate:n;` — règle LES DEUX moteurs à la même valeur. */
-    fun vibrateBoth(intensity: Int): ByteArray =
-        "Vibrate:${clamp(intensity)};".toByteArray(Charsets.US_ASCII)
-
     /** `PowerOff;` — éteint le toy. */
     fun powerOff(): ByteArray = "PowerOff;".toByteArray(Charsets.US_ASCII)
+
+    /** Commande d'un actionneur quelconque, bornée à sa plage propre. */
+    fun actuatorCommand(kind: ActuatorKind, level: Int): ByteArray {
+        val n = level.coerceIn(0, kind.max)
+        val s = when (kind) {
+            ActuatorKind.VIBRATE -> "Vibrate:$n;"
+            ActuatorKind.VIBRATE1 -> "Vibrate1:$n;"
+            ActuatorKind.VIBRATE2 -> "Vibrate2:$n;"
+            ActuatorKind.ROTATE -> "Rotate:$n;"
+            ActuatorKind.AIR -> "Air:Level:$n;"
+        }
+        return s.toByteArray(Charsets.US_ASCII)
+    }
+
+    /** `RotateChange;` — inverse le sens de rotation (actionneurs ROTATE). */
+    fun rotateChange(): ByteArray = "RotateChange;".toByteArray(Charsets.US_ASCII)
 
     // --- Conversions / parsing -------------------------------------------
 
     /** Borne une intensité dans [0..20]. */
     fun clamp(intensity: Int): Int = intensity.coerceIn(0, INTENSITY_MAX)
 
-    /** Convertit une fraction UI [0f..1f] en niveau Lovense [0..20]. */
-    fun fractionToLevel(fraction: Float): Int =
-        (fraction.coerceIn(0f, 1f) * INTENSITY_MAX).roundToInt()
+    /** Convertit une fraction UI [0f..1f] en niveau d'actionneur [0..max]. */
+    fun fractionToLevel(fraction: Float, max: Int = INTENSITY_MAX): Int =
+        (fraction.coerceIn(0f, 1f) * max).roundToInt()
 
     /**
      * Parse une notification du toy. Renvoie un [Reply] typé.
