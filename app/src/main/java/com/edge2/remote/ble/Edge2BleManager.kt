@@ -69,12 +69,18 @@ class Edge2BleManager(context: Context) {
     private val _motorLevels = MutableStateFlow(MotorLevels())
     val motorLevels: StateFlow<MotorLevels> = _motorLevels.asStateFlow()
 
+    /** Toys Lovense visibles pendant le scan (pour la sélection à la connexion). */
+    private val _discovered = MutableStateFlow<List<DiscoveredToy>>(emptyList())
+    val discovered: StateFlow<List<DiscoveredToy>> = _discovered.asStateFlow()
+
     // --- État interne GATT ------------------------------------------------
 
     private var gatt: BluetoothGatt? = null
     private var tx: BluetoothGattCharacteristic? = null
     private var rx: BluetoothGattCharacteristic? = null
-    private var deviceName: String = "Edge 2"
+    private var deviceName: String = "Lovense"
+    /** Toy choisi par l'utilisateur (pour reconnexion auto sur le bon appareil). */
+    private var chosenDevice: BluetoothDevice? = null
 
     /** True si l'utilisateur a explicitement coupé → on n'auto-reconnecte pas. */
     @Volatile private var userDisconnect = false
@@ -98,8 +104,8 @@ class Edge2BleManager(context: Context) {
     // API publique
     // ====================================================================
 
-    /** Lance scan + connexion. No-op si déjà connecté/en cours. */
-    fun connect() {
+    /** Démarre la découverte : scanne et publie les toys visibles dans [discovered]. */
+    fun startDiscovery() {
         if (!hasPermissions()) {
             _connectionState.value = ConnectionState.Error("Permissions BLE manquantes")
             return
@@ -114,7 +120,23 @@ class Edge2BleManager(context: Context) {
         ) return
 
         userDisconnect = false
+        _discovered.value = emptyList()
         startScan()
+    }
+
+    /** Connexion au toy choisi dans la liste des toys découverts. */
+    fun connectTo(toy: DiscoveredToy) {
+        val a = adapter ?: return
+        userDisconnect = false
+        reconnectAttempts = 0
+        deviceName = toy.displayName
+        stopScan()
+        val device = runCatching { a.getRemoteDevice(toy.address) }.getOrNull() ?: run {
+            _connectionState.value = ConnectionState.Error("Appareil introuvable")
+            return
+        }
+        chosenDevice = device
+        connectGatt(device)
     }
 
     /** Coupe la connexion à la demande de l'utilisateur (pas de reconnexion auto). */
@@ -123,8 +145,10 @@ class Edge2BleManager(context: Context) {
         scope.launch {
             stopScan()
             teardownGatt()
+            chosenDevice = null
             _connectionState.value = ConnectionState.Disconnected
             _motorLevels.value = MotorLevels()
+            _discovered.value = emptyList()
         }
     }
 
@@ -155,11 +179,14 @@ class Edge2BleManager(context: Context) {
 
     private val scanCallback = object : ScanCallback() {
         override fun onScanResult(callbackType: Int, result: ScanResult) {
-            val name = result.device.name ?: result.scanRecord?.deviceName
-            if (name != null && name.startsWith(LovenseProtocol.BLE_NAME_PREFIX)) {
-                deviceName = name
-                stopScan()
-                connectGatt(result.device)
+            val name = result.device.name ?: result.scanRecord?.deviceName ?: return
+            if (!name.startsWith(LovenseProtocol.BLE_NAME_PREFIX)) return
+            val address = result.device.address ?: return
+            // On accumule les toys visibles (dédupliqués, triés par signal) sans
+            // connecter : l'utilisateur choisit dans la liste.
+            val toy = DiscoveredToy(address = address, bleName = name, rssi = result.rssi)
+            _discovered.update { list ->
+                (list.filterNot { it.address == address } + toy).sortedByDescending { it.rssi }
             }
         }
 
@@ -179,17 +206,9 @@ class Edge2BleManager(context: Context) {
             .build()
         // Pas de filtre matériel (le nom n'est pas filtrable par préfixe) :
         // on filtre dans onScanResult sur le préfixe `LVS-`.
+        // On scanne en continu : la liste [discovered] se remplit au fil de l'eau.
+        // Pas de timeout d'erreur — l'utilisateur voit juste « rien pour l'instant ».
         scanner.startScan(null, settings, scanCallback)
-
-        // Timeout de scan : 15 s sans toy → erreur.
-        scanTimeoutJob?.cancel()
-        scanTimeoutJob = scope.launch {
-            delay(15_000)
-            if (_connectionState.value is ConnectionState.Scanning) {
-                stopScan()
-                _connectionState.value = ConnectionState.Error("Aucun toy Lovense trouvé")
-            }
-        }
     }
 
     private fun stopScan() {
@@ -314,12 +333,14 @@ class Edge2BleManager(context: Context) {
             _connectionState.value = ConnectionState.Disconnected
             return
         }
-        // Reconnexion auto avec back-off : 1, 2, 4, 8 s (plafonné).
+        // Reconnexion auto au MÊME toy avec back-off : 1, 2, 4, 8 s (plafonné).
+        val dev = chosenDevice
+        if (dev == null) { _connectionState.value = ConnectionState.Disconnected; return }
         reconnectAttempts++
         val backoff = (1_000L shl (reconnectAttempts - 1).coerceAtMost(3))
         _connectionState.value = ConnectionState.Connecting
         delay(backoff)
-        if (!userDisconnect) startScan()
+        if (!userDisconnect) connectGatt(dev)
     }
 
     private suspend fun teardownGatt() {

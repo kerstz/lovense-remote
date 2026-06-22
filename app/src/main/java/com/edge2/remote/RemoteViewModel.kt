@@ -3,6 +3,7 @@ package com.edge2.remote
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.edge2.remote.ble.DiscoveredToy
 import com.edge2.remote.ble.Edge2BleManager
 import com.edge2.remote.ble.Motor
 import kotlinx.coroutines.flow.update
@@ -30,6 +31,9 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
 
     val connectionState = ble.connectionState
     val motorLevels = ble.motorLevels
+
+    /** Toys Lovense visibles pendant le scan (sélection à la connexion). */
+    val discovered = ble.discovered
     val playing: StateFlow<String?> = player.playing
 
     /** Mode Link : un seul geste pilote les deux moteurs ensemble. */
@@ -86,7 +90,12 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun connect() = ble.connect()
+    /** Démarre le scan : remplit [discovered] avec les toys visibles. */
+    fun scan() = ble.startDiscovery()
+
+    /** Connecte le toy choisi dans la liste. */
+    fun connectTo(toy: DiscoveredToy) = ble.connectTo(toy)
+
     fun disconnect() = ble.disconnect()
 
     fun toggleLink() { _linkMode.value = !_linkMode.value }

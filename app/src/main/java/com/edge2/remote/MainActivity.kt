@@ -57,12 +57,14 @@ private fun App() {
     val vm: RemoteViewModel = viewModel()
     val state by vm.connectionState.collectAsStateWithLifecycle()
 
-    // Demande des permissions BLE puis lance la connexion si accordées.
+    val discovered by vm.discovered.collectAsStateWithLifecycle()
+
+    // Demande les permissions BLE puis lance le scan si accordées.
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions(),
-    ) { result -> if (result.values.all { it }) vm.connect() }
+    ) { result -> if (result.values.all { it }) vm.scan() }
 
-    fun requestConnect() {
+    fun requestScan() {
         val perms = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             arrayOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT)
         } else {
@@ -74,6 +76,11 @@ private fun App() {
     if (state is ConnectionState.Connected) {
         RemoteScreen(vm = vm, onDisconnect = { vm.disconnect() })
     } else {
-        ConnectionScreen(state = state, onConnect = ::requestConnect)
+        ConnectionScreen(
+            state = state,
+            discovered = discovered,
+            onScan = ::requestScan,
+            onSelect = { vm.connectTo(it) },
+        )
     }
 }

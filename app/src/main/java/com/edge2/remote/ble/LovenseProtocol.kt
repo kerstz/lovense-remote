@@ -28,6 +28,13 @@ object LovenseProtocol {
     /** Préfixe du nom BLE annoncé par tous les toys Lovense récents. */
     const val BLE_NAME_PREFIX = "LVS-"
 
+    /** "LVS-Edge2-3A9F" → "Edge 2". Espace inséré entre lettres et chiffres. */
+    fun prettyModelName(bleName: String): String {
+        val token = bleName.removePrefix(BLE_NAME_PREFIX).substringBefore('-')
+        if (token.isBlank()) return "Lovense"
+        return token.replace(Regex("(?<=[A-Za-z])(?=[0-9])"), " ")
+    }
+
     /** CCCD standard (Client Characteristic Configuration Descriptor). */
     val CCCD_UUID: UUID = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
 
