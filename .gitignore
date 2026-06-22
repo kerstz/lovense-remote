@@ -16,6 +16,7 @@ captures/
 *.apkm
 bugreport*.zip
 snoop_extract/
+apk_extract/
 *.log
 *.dec
 

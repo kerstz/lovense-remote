@@ -5,6 +5,9 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.edge2.remote.ble.Edge2BleManager
 import com.edge2.remote.ble.Motor
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import com.edge2.remote.pattern.LovenseImporter
 import com.edge2.remote.pattern.Pattern
 import com.edge2.remote.pattern.PatternPlayer
 import com.edge2.remote.remote.NetworkUtils
@@ -89,12 +92,32 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
 
     fun playPattern(pattern: Pattern) = player.play(pattern)
 
+    // --- Import de patterns Lovense (.ta public) -------------------------
+
+    private val importer = LovenseImporter()
+
+    private val _importedPatterns = MutableStateFlow<List<Pattern>>(emptyList())
+    val importedPatterns: StateFlow<List<Pattern>> = _importedPatterns.asStateFlow()
+
+    /** Importe depuis une URL `.ta` publique (téléchargement asynchrone). */
+    fun importFromUrl(url: String) {
+        viewModelScope.launch {
+            importer.fromUrl(url.trim())?.let { p -> _importedPatterns.update { it + p } }
+        }
+    }
+
+    /** Importe depuis un contenu `.ta` collé. */
+    fun importFromText(content: String) {
+        importer.fromText(content.trim())?.let { p -> _importedPatterns.update { it + p } }
+    }
+
     /** Stoppe tout : lecture de pattern + moteurs. */
     fun stopAll() = player.stop()
 
     override fun onCleared() {
         super.onCleared()
         server.stop()
+        importer.close()
         ble.release()
     }
 }
