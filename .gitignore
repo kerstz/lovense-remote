@@ -22,3 +22,6 @@ apk_extract/
 
 # OS
 .DS_Store
+
+# Playwright MCP artefacts
+.playwright-mcp/
