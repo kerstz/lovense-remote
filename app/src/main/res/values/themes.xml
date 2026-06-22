@@ -1,0 +1,5 @@
+<resources>
+    <!-- Thème minimal : Material3 dynamique géré côté Compose.
+         On part d'un thème Material3 sans ActionBar. -->
+    <style name="Theme.Edge2Remote" parent="android:Theme.Material.NoActionBar" />
+</resources>
