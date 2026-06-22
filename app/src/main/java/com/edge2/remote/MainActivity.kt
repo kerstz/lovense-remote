@@ -7,7 +7,9 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.dynamicDarkColorScheme
@@ -34,10 +36,14 @@ class MainActivity : ComponentActivity() {
             }
             MaterialTheme(colorScheme = colors) {
                 Surface(modifier = Modifier.fillMaxSize()) {
-                    if (controllerWsUrl != null) {
-                        ControllerScreen(wsUrl = controllerWsUrl)
-                    } else {
-                        App()
+                    // Android 15+ force l'edge-to-edge : on rembourre des barres
+                    // système (statut + navigation) pour ne pas dessiner dessous.
+                    Box(modifier = Modifier.fillMaxSize().safeDrawingPadding()) {
+                        if (controllerWsUrl != null) {
+                            ControllerScreen(wsUrl = controllerWsUrl)
+                        } else {
+                            App()
+                        }
                     }
                 }
             }
