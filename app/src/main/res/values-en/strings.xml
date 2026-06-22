@@ -57,7 +57,7 @@
     <string name="share_internet_hint">Open this link from ANYWHERE (mobile data/other network):</string>
     <string name="share_lan_title">Same WiFi (LAN)</string>
     <string name="share_lan_hint">More responsive on the same WiFi:</string>
-    <string name="share_none">No WiFi detected and tunnel not configured. Connect to WiFi, or set RelayConfig.BASE_URL.</string>
+    <string name="share_none">No share link available. Check the app\'s network permission.</string>
     <string name="share_warn">While this share is open, whoever has the link controls the toy.</string>
     <string name="qr_desc">Control link QR code</string>
     <string name="action_copy">Copy</string>

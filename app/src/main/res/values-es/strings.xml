@@ -57,7 +57,7 @@
     <string name="share_internet_hint">Abre este enlace desde CUALQUIER LUGAR (datos/otra red):</string>
     <string name="share_lan_title">Misma WiFi (LAN)</string>
     <string name="share_lan_hint">Más reactivo en la misma WiFi:</string>
-    <string name="share_none">No se detecta WiFi y el túnel no está configurado. Conecta a una WiFi o ajusta RelayConfig.BASE_URL.</string>
+    <string name="share_none">No hay enlace de uso compartido. Revisa el permiso de red de la app.</string>
     <string name="share_warn">Mientras este enlace esté abierto, quien lo tenga controla el juguete.</string>
     <string name="qr_desc">Código QR del enlace de control</string>
     <string name="action_copy">Copiar</string>
