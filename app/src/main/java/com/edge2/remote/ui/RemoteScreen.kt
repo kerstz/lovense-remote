@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
@@ -53,6 +55,8 @@ fun RemoteScreen(vm: RemoteViewModel, onRequestConnect: () -> Unit) {
     val link by vm.linkMode.collectAsStateWithLifecycle()
     val playing by vm.playing.collectAsStateWithLifecycle()
     val shareUrl by vm.shareUrl.collectAsStateWithLifecycle()
+    val tunnelUrl by vm.tunnelUrl.collectAsStateWithLifecycle()
+    val tunnelConnected by vm.tunnelConnected.collectAsStateWithLifecycle()
     val imported by vm.importedPatterns.collectAsStateWithLifecycle()
 
     val connected = state is ConnectionState.Connected
@@ -102,7 +106,9 @@ fun RemoteScreen(vm: RemoteViewModel, onRequestConnect: () -> Unit) {
 
         if (shareOpen) {
             ShareDialog(
-                url = shareUrl,
+                lanUrl = shareUrl,
+                tunnelUrl = tunnelUrl,
+                tunnelConnected = tunnelConnected,
                 onDismiss = { vm.stopSharing(); shareOpen = false },
             )
         }
@@ -239,34 +245,67 @@ private fun ImportDialog(
 }
 
 @Composable
-private fun ShareDialog(url: String?, onDismiss: () -> Unit) {
+private fun ShareDialog(
+    lanUrl: String?,
+    tunnelUrl: String?,
+    tunnelConnected: Boolean,
+    onDismiss: () -> Unit,
+) {
     AlertDialog(
         onDismissRequest = onDismiss,
         confirmButton = { TextButton(onClick = onDismiss) { Text("Arrêter le partage") } },
         title = { Text("Contrôle à distance") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                if (url == null) {
-                    Text("Aucun réseau WiFi détecté. Connecte le téléphone à un WiFi pour partager en LAN (le tunnel internet arrive en 4B).")
-                } else {
-                    Text("Sur le MÊME WiFi, ouvre ce lien (ou scanne le QR) :")
-                    Text(url, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
-                    val qr = remember(url) { NetworkUtils.qrBitmap(url, 480).asImageBitmap() }
-                    Image(
-                        bitmap = qr,
-                        contentDescription = "QR du lien de contrôle",
-                        modifier = Modifier
-                            .width(220.dp)
-                            .height(220.dp),
-                    )
-                    Text(
-                        "Tant que ce partage est ouvert, qui a le lien pilote le toy.",
-                        style = MaterialTheme.typography.bodySmall,
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                // --- Internet (tunnel) : marche de partout -------------------
+                if (tunnelUrl != null) {
+                    val state = if (tunnelConnected) "relais connecté ✓" else "connexion au relais…"
+                    ShareBlock(
+                        title = "Internet — $state",
+                        hint = "Ouvre ce lien de N'IMPORTE OÙ (4G/WiFi, autre réseau) :",
+                        url = tunnelUrl,
                     )
                 }
+
+                // --- LAN : même WiFi, latence minimale -----------------------
+                when {
+                    lanUrl != null -> ShareBlock(
+                        title = "Même WiFi (LAN)",
+                        hint = "Plus réactif si vous êtes sur le même WiFi :",
+                        url = lanUrl,
+                    )
+                    tunnelUrl == null -> Text(
+                        "Aucun WiFi détecté et tunnel non configuré. Connecte un WiFi pour le LAN, ou règle RelayConfig.BASE_URL pour le tunnel internet.",
+                    )
+                }
+
+                Text(
+                    "Tant que ce partage est ouvert, qui a le lien pilote le toy.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
             }
         },
     )
+}
+
+@Composable
+private fun ShareBlock(title: String, hint: String, url: String) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+        Text(hint, style = MaterialTheme.typography.bodySmall)
+        Text(url, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+        val qr = remember(url) { NetworkUtils.qrBitmap(url, 480).asImageBitmap() }
+        Image(
+            bitmap = qr,
+            contentDescription = "QR du lien de contrôle",
+            modifier = Modifier
+                .width(200.dp)
+                .height(200.dp),
+        )
+    }
 }
 
 private fun statusLabel(state: ConnectionState): String = when (state) {

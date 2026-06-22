@@ -1,0 +1,11 @@
+# Garde le contexte Docker léger : pas d'APK géant, dumps, ni artefacts de build.
+*.apkm
+*.apk
+*.zip
+apk_extract/
+snoop_extract/
+**/build/
+.gradle/
+.kotlin/
+.git/
+local.properties

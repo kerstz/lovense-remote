@@ -11,8 +11,10 @@ import com.edge2.remote.pattern.LovenseImporter
 import com.edge2.remote.pattern.Pattern
 import com.edge2.remote.pattern.PatternPlayer
 import com.edge2.remote.remote.NetworkUtils
+import com.edge2.remote.remote.RelayConfig
 import com.edge2.remote.remote.RemoteCommand
 import com.edge2.remote.remote.RemoteServer
+import com.edge2.remote.remote.RemoteTunnel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -37,24 +39,36 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
     // --- Partage à distance (host) ---------------------------------------
 
     private val server = RemoteServer(app.assets) { cmd -> applyRemote(cmd) }
+    private val tunnel = RemoteTunnel(viewModelScope) { cmd -> applyRemote(cmd) }
 
-    /** URL de partage `http://<ip-lan>:<port>/s/<id>`, ou null si pas de partage. */
+    /** URL de partage LAN `http://<ip-lan>:<port>/s/<id>`, ou null si pas de WiFi. */
     private val _shareUrl = MutableStateFlow<String?>(null)
     val shareUrl: StateFlow<String?> = _shareUrl.asStateFlow()
+
+    /** URL de partage internet `https://<relais>/s/<id>`, ou null si tunnel inactif. */
+    private val _tunnelUrl = MutableStateFlow<String?>(null)
+    val tunnelUrl: StateFlow<String?> = _tunnelUrl.asStateFlow()
+
+    /** true quand le téléphone est bien rattaché au relais (joignable depuis internet). */
+    val tunnelConnected: StateFlow<Boolean> = tunnel.connected
 
     fun startSharing() {
         server.start()
         val ip = NetworkUtils.lanIpv4()
-        _shareUrl.value = if (ip != null) {
-            "http://$ip:${server.port}/s/${server.sessionId}"
-        } else {
-            null // pas de réseau local détecté
+        _shareUrl.value = ip?.let { "http://$it:${server.port}/s/${server.sessionId}" }
+
+        // Tunnel internet : actif seulement si un relais est configuré (RelayConfig).
+        if (RelayConfig.enabled) {
+            tunnel.start()
+            _tunnelUrl.value = tunnel.shareUrl
         }
     }
 
     fun stopSharing() {
         server.stop()
+        tunnel.stop()
         _shareUrl.value = null
+        _tunnelUrl.value = null
     }
 
     /** Applique une commande reçue d'un contrôleur distant (web ou app). */
@@ -117,6 +131,7 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
     override fun onCleared() {
         super.onCleared()
         server.stop()
+        tunnel.release()
         importer.close()
         ble.release()
     }

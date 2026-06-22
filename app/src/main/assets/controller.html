@@ -64,7 +64,9 @@
   // id de session = dernier segment du chemin /s/<id>
   var parts = location.pathname.split('/').filter(Boolean);
   var id = parts.length >= 2 && parts[0] === 's' ? parts[1] : '';
-  var wsUrl = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws?id=' + id;
+  // __WS_PATH__ est substitué par le serveur qui sert cette page : "/ws" pour le
+  // serveur embarqué (LAN), "/ctrl" pour le relais internet (Phase 4B).
+  var wsUrl = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '__WS_PATH__?id=' + id;
 
   // Deep link vers l'app (fallback : reste sur cette page).
   document.getElementById('openApp').onclick = function () {

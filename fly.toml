@@ -1,0 +1,21 @@
+# Relais Edge2 Remote — déploiement fly.io.
+# Contexte de build = racine du repo. Déploie depuis la racine :
+#     fly launch --no-deploy   # crée/édite l'app, garde ce fichier
+#     fly deploy
+# fournit https://<app>.fly.dev → wss://<app>.fly.dev (TLS auto).
+app = "edge2-relay"
+primary_region = "cdg"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[http_service]
+  internal_port = 8080
+  force_https = true          # → wss:// fourni par fly, le secret reste chiffré en transit
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0    # 0 = s'éteint quand personne ne pilote (gratuit au repos)
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"            # JVM Ktor minimale ; descendable à 256mb si besoin

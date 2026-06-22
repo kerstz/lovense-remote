@@ -40,7 +40,9 @@ class RemoteServer(
     private var engine: io.ktor.server.engine.ApplicationEngine? = null
 
     private val html: String by lazy {
+        // Serveur embarqué (LAN) → le WS de la page pointe sur "/ws".
         assets.open("controller.html").bufferedReader().use { it.readText() }
+            .replace("__WS_PATH__", "/ws")
     }
 
     fun start() {
