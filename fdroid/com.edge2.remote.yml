@@ -1,0 +1,47 @@
+# Metadata F-Droid prêt à soumettre.
+# À copier dans une fork de gitlab.com/fdroid/fdroiddata sous
+# metadata/com.edge2.remote.yml, puis ouvrir une merge request.
+Categories:
+  - Connectivity
+License: GPL-3.0-only
+AuthorName: kerstz
+SourceCode: https://github.com/kerstz/edge2-remote
+IssueTracker: https://github.com/kerstz/edge2-remote/issues
+
+AntiFeatures:
+  - NonFreeNet
+
+AutoName: Edge2 Remote
+Summary: Direct-Bluetooth remote for Lovense toys
+Description: |-
+  Control Lovense toys directly over Bluetooth LE, without the Lovense app, an
+  account, or the cloud.
+
+  * Multi-toy: the UI adapts to each toy's actuators (vibration, dual motor,
+    rotation, suction).
+  * One-hand XY pad for two-motor toys; presets; patterns; a random Tease mode
+    and a record mode.
+  * Remote control by link, on the same Wi-Fi or over the internet, protected by
+    a per-session PIN with an accept/refuse prompt and auto-expiry.
+  * Keeps the connection alive in the background; quick-settings STOP tile.
+  * French / English / Spanish; dark & light themes.
+  * 100% AOSP, no Google Play Services.
+
+  Internet sharing routes traffic through localhost.run (a third party), hence
+  the NonFreeNet anti-feature. Not affiliated with Lovense.
+
+RepoType: git
+Repo: https://github.com/kerstz/edge2-remote.git
+
+Builds:
+  - versionName: 0.1.0
+    versionCode: 1
+    commit: v0.1.0
+    subdir: app
+    gradle:
+      - yes
+
+AutoUpdateMode: Version v%v
+UpdateCheckMode: Tags
+CurrentVersion: 0.1.0
+CurrentVersionCode: 1

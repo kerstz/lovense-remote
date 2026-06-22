@@ -38,14 +38,12 @@ Min SDK 26, target/compile SDK 35, Kotlin + Jetpack Compose.
   survives the Activity / app being closed.
 - `remote/` — embedded HTTP+WS server (host), web control page
   (`assets/controller.html`), and the internet tunnel (`SshTunnel`).
-- `:relay` — optional **self-hosted** relay (Ktor, deploy to fly.io) if you prefer
-  not to route traffic through a third party.
 
 ## Privacy
 
 LAN sharing stays on your network. Internet sharing routes traffic through
-**localhost.run** (a third party); for full privacy, deploy the self-hosted
-`:relay` instead and point `RelayConfig` at it.
+**localhost.run** (a third party). The control link is gated by a per-session
+PIN and an accept/refuse prompt, and the session auto-expires.
 
 ## License
 

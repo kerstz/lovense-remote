@@ -59,7 +59,7 @@
     <string name="share_internet_hint">Ouvre ce lien de N\'IMPORTE OÙ (4G/autre réseau) :</string>
     <string name="share_lan_title">Même WiFi (LAN)</string>
     <string name="share_lan_hint">Plus réactif sur le même WiFi :</string>
-    <string name="share_none">Aucun WiFi détecté et tunnel non configuré. Connecte un WiFi, ou règle RelayConfig.BASE_URL.</string>
+    <string name="share_none">Aucun lien de partage disponible. Vérifie l\'autorisation réseau de l\'app.</string>
     <string name="share_warn">Tant que ce partage est ouvert, qui a le lien pilote le toy.</string>
     <string name="qr_desc">QR du lien de contrôle</string>
     <string name="action_copy">Copier</string>

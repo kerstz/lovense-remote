@@ -18,6 +18,21 @@ android {
         vectorDrawables { useSupportLibrary = true }
     }
 
+    // Signature release : clé fournie par l'environnement (CI). Absente (build
+    // F-Droid) → signingConfig nul, F-Droid signe avec sa propre clé.
+    val ksPath: String? = System.getenv("SIGNING_KEYSTORE_FILE")
+    val ksPresent = ksPath != null && file(ksPath).exists()
+    signingConfigs {
+        create("release") {
+            if (ksPresent) {
+                storeFile = file(ksPath!!)
+                storePassword = System.getenv("SIGNING_STORE_PASSWORD")
+                keyAlias = System.getenv("SIGNING_KEY_ALIAS")
+                keyPassword = System.getenv("SIGNING_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
@@ -25,6 +40,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
+            signingConfig = if (ksPresent) signingConfigs.getByName("release") else null
         }
     }
 
