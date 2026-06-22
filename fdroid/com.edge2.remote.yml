@@ -1,6 +1,5 @@
-# Metadata F-Droid prêt à soumettre.
-# À copier dans une fork de gitlab.com/fdroid/fdroiddata sous
-# metadata/com.edge2.remote.yml, puis ouvrir une merge request.
+AntiFeatures:
+  - NonFreeNet
 Categories:
   - Connectivity
 License: GPL-3.0-only
@@ -8,27 +7,21 @@ AuthorName: kerstz
 SourceCode: https://github.com/kerstz/lovense-remote
 IssueTracker: https://github.com/kerstz/lovense-remote/issues
 
-AntiFeatures:
-  - NonFreeNet
-
 AutoName: Lovense Remote
 Summary: Direct-Bluetooth remote for Lovense toys
 Description: |-
-  Control Lovense toys directly over Bluetooth LE, without the Lovense app, an
-  account, or the cloud.
+  Control Lovense toys directly over Bluetooth LE, without the Lovense app, an account, or the cloud.
 
-  * Multi-toy: the UI adapts to each toy's actuators (vibration, dual motor,
-    rotation, suction).
-  * One-hand XY pad for two-motor toys; presets; patterns; a random Tease mode
-    and a record mode.
-  * Remote control by link, on the same Wi-Fi or over the internet, protected by
-    a per-session PIN with an accept/refuse prompt and auto-expiry.
-  * Keeps the connection alive in the background; quick-settings STOP tile.
-  * French / English / Spanish; dark & light themes.
+  Features:
+
+  * Multi-toy: the UI adapts to each toy's actuators (vibration, dual motor, rotation, suction).
+  * One-hand XY pad for two-motor toys; intensity presets; patterns; a random Tease mode and a record mode.
+  * Remote control by link, on the same Wi-Fi or over the internet, gated by a per-session PIN with an accept/refuse prompt and auto-expiry.
+  * Keeps the connection alive in the background, plus a quick-settings STOP tile.
+  * French / English / Spanish; dark and light themes.
   * 100% AOSP, no Google Play Services.
 
-  Internet sharing routes traffic through localhost.run (a third party), hence
-  the NonFreeNet anti-feature. Not affiliated with Lovense.
+  Internet sharing routes traffic through localhost.run (a third party). Not affiliated with Lovense.
 
 RepoType: git
 Repo: https://github.com/kerstz/lovense-remote.git
