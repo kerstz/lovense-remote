@@ -26,6 +26,9 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
     val tunnelConnected = engine.tunnelConnected
     val tunnelPreparing = engine.tunnelPreparing
     val shareError = engine.shareError
+    val sharing = engine.sharing
+    val pin = engine.pin
+    val approved = engine.approved
     val importedPatterns = engine.importedPatterns
 
     // Actions
@@ -41,6 +44,8 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
     fun stopAll() = engine.stopAll()
     fun startSharing() = engine.startSharing()
     fun stopSharing() = engine.stopSharing()
+    fun approveControl() = engine.approveControl()
+    fun refuseControl() = engine.refuseControl()
     fun importFromUrl(url: String) = engine.importFromUrl(url)
     fun importFromText(content: String) = engine.importFromText(content)
 

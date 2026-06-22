@@ -56,6 +56,17 @@ class RemoteEngine private constructor(context: Context) {
 
     /** Partage actif (serveur embarqué démarré) — pilote le service premier-plan. */
     private val _sharing = MutableStateFlow(false)
+    val sharing: StateFlow<Boolean> = _sharing.asStateFlow()
+
+    /** Code PIN du partage en cours (à communiquer au contrôleur), ou null. */
+    private val _pin = MutableStateFlow<String?>(null)
+    val pin: StateFlow<String?> = _pin.asStateFlow()
+
+    /** L'hôte a-t-il accepté que le contrôleur prenne la main ? (gate des commandes) */
+    private val _approved = MutableStateFlow(false)
+    val approved: StateFlow<Boolean> = _approved.asStateFlow()
+
+    private var expiryJob: kotlinx.coroutines.Job? = null
 
     private val _shareUrl = MutableStateFlow<String?>(null)
     val shareUrl: StateFlow<String?> = _shareUrl.asStateFlow()
@@ -138,9 +149,14 @@ class RemoteEngine private constructor(context: Context) {
     }
 
     fun startSharing() {
+        // Code PIN obligatoire (4 chiffres) — à dire au contrôleur, hors du lien.
+        val code = "%04d".format(kotlin.random.Random.nextInt(10000))
+        server.pin = code
         // Réseau bloqué (pare-feu / autorisation coupée) → on n'amorce rien (pas de crash).
         if (!server.start()) { _shareError.value = true; return }
         _shareError.value = false
+        _pin.value = code
+        _approved.value = false
         _sharing.value = true
         // LAN (Wi-Fi/Ethernet seulement ; null en 4G).
         val ip = NetworkUtils.lanIpv4()
@@ -150,12 +166,26 @@ class RemoteEngine private constructor(context: Context) {
             _tunnelPreparing.value = true
             tunnel.start(server.port)
         }
+        // Expiration auto : coupe l'accès après 30 min.
+        expiryJob?.cancel()
+        expiryJob = scope.launch { kotlinx.coroutines.delay(30 * 60_000L); stopSharing() }
     }
 
+    /** L'hôte accepte que le contrôleur prenne la main. */
+    fun approveControl() { _approved.value = true }
+
+    /** L'hôte refuse → coupe l'accès (arrête le partage). */
+    fun refuseControl() = stopSharing()
+
     fun stopSharing() {
+        expiryJob?.cancel()
+        expiryJob = null
         tunnel.stop()
         server.stop()
+        server.pin = null
         _sharing.value = false
+        _pin.value = null
+        _approved.value = false
         _shareUrl.value = null
         _tunnelUrl.value = null
         _tunnelConnected.value = false
@@ -175,6 +205,8 @@ class RemoteEngine private constructor(context: Context) {
 
     /** Commande reçue d'un contrôleur distant ; M1/M2 → actionneurs 0/1. */
     private fun applyRemote(cmd: RemoteCommand) {
+        // Gate : tant que l'hôte n'a pas accepté, on ignore les commandes distantes.
+        if (!_approved.value) return
         player.cancel()
         when (cmd) {
             is RemoteCommand.SetMotor -> ble.setActuator(cmd.index - 1, cmd.level)

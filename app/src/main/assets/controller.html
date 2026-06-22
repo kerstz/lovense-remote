@@ -107,6 +107,14 @@
   <div class="lock" data-i18n="lock">🔒 Connexion chiffrée · aucune donnée stockée</div>
 </div>
 
+<!-- Porte PIN (si l'hôte a mis un code) -->
+<div id="pinGate" style="display:none;position:fixed;inset:0;z-index:11;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:32px;text-align:center;background:radial-gradient(120% 70% at 50% 0%,#1A1622,#0C0C12);">
+  <div class="eyebrow" data-i18n="pinTitle">CODE</div>
+  <div style="font-size:20px;font-weight:700;" data-i18n="pinAsk">Entre le code à 4 chiffres</div>
+  <input id="pinInput" inputmode="numeric" maxlength="6" style="width:170px;text-align:center;font-size:30px;letter-spacing:10px;padding:12px;border-radius:14px;background:#15151c;border:1px solid #333;color:#fff;font-family:'JetBrains Mono';">
+  <button class="btn-primary" id="pinOk" data-i18n="pinOk">Valider</button>
+</div>
+
 <!-- Étape 2 : contrôle -->
 <div class="live off" id="liveBar">
   <span class="ping"><span class="b"></span><span></span></span>
@@ -149,17 +157,20 @@
       openApp:'Ouvrir dans l\'app', goWeb:'Continuer sur le web', lock:'🔒 Connexion chiffrée · aucune donnée stockée', openApp2:'Ouvrir l\'app',
       hint:'Glisse le point — horizontal = base · vertical = tige', base:'BASE', tige:'TIGE', soft:'Doux', medium:'Moyen', strong:'Fort', stopAll:'TOUT ARRÊTER',
       connecting:'Connexion…', linking:'Établissement du lien', liveOn:'En direct · tu as le contrôle', liveSub2:'Contrôle à distance',
-      disconnected:'Déconnecté', reconnecting:'Reconnexion…' },
+      disconnected:'Déconnecté', reconnecting:'Reconnexion…',
+      pinTitle:'CODE', pinAsk:'Entre le code à 4 chiffres', pinOk:'Valider' },
     en: { invitation:'INVITATION', inviteTitle:'You are invited to<br>take control', inviteSub:'Live control · temporary session',
       openApp:'Open in the app', goWeb:'Continue on the web', lock:'🔒 Encrypted connection · no data stored', openApp2:'Open app',
       hint:'Drag the dot — horizontal = base · vertical = shaft', base:'BASE', tige:'SHAFT', soft:'Soft', medium:'Medium', strong:'Strong', stopAll:'STOP ALL',
       connecting:'Connecting…', linking:'Establishing link', liveOn:'Live · you have control', liveSub2:'Remote control',
-      disconnected:'Disconnected', reconnecting:'Reconnecting…' },
+      disconnected:'Disconnected', reconnecting:'Reconnecting…',
+      pinTitle:'CODE', pinAsk:'Enter the 4-digit code', pinOk:'Confirm' },
     es: { invitation:'INVITACIÓN', inviteTitle:'Estás invitado/a a<br>tomar el control', inviteSub:'Control en vivo · sesión temporal',
       openApp:'Abrir en la app', goWeb:'Continuar en la web', lock:'🔒 Conexión cifrada · sin datos almacenados', openApp2:'Abrir app',
       hint:'Arrastra el punto — horizontal = base · vertical = eje', base:'BASE', tige:'EJE', soft:'Suave', medium:'Medio', strong:'Fuerte', stopAll:'PARAR TODO',
       connecting:'Conectando…', linking:'Estableciendo enlace', liveOn:'En vivo · tienes el control', liveSub2:'Control remoto',
-      disconnected:'Desconectado', reconnecting:'Reconectando…' },
+      disconnected:'Desconectado', reconnecting:'Reconectando…',
+      pinTitle:'CÓDIGO', pinAsk:'Introduce el código de 4 dígitos', pinOk:'Confirmar' },
   };
   var lang = (navigator.language || 'fr').slice(0, 2);
   var T = I18N[lang] || I18N.fr;
@@ -182,23 +193,41 @@
   var id = parts.length >= 2 && parts[0] === 's' ? parts[1] : '';
   // __WS_PATH__ substitué par le serveur : "/ws" (app embarquée) ou "/ctrl" (relais).
   var wsUrl = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '__WS_PATH__?id=' + id;
-  var deepLink = 'edge2remote://control?ws=' + encodeURIComponent(wsUrl);
-
-  document.getElementById('intro').style.display = 'flex';
-  document.getElementById('goWeb').onclick = function () { document.getElementById('intro').style.display = 'none'; };
-  document.getElementById('openApp').onclick = function () { location.href = deepLink; };
-  document.getElementById('openApp2').onclick = function () { location.href = deepLink; };
+  // PIN exigé par l'hôte ? (token substitué par le serveur)
+  var pinRequired = '__PIN_REQUIRED__' === '1';
+  var pin = '';
+  function fullWsUrl() { return wsUrl + (pin ? '&pin=' + encodeURIComponent(pin) : ''); }
+  function deepLink() { return 'edge2remote://control?ws=' + encodeURIComponent(fullWsUrl()); }
 
   var ws, live = document.getElementById('liveBar'),
       lt = document.getElementById('liveTitle'), ls = document.getElementById('liveSub');
   lt.textContent = T.connecting; ls.textContent = T.linking;
+
+  var afterPinGoApp = false;
+  function proceed() {
+    if (pinRequired && !pin) {
+      document.getElementById('pinGate').style.display = 'flex';
+      document.getElementById('pinInput').focus();
+    } else { finish(); }
+  }
+  function finish() { if (afterPinGoApp) location.href = deepLink(); else connect(); }
+
+  document.getElementById('intro').style.display = 'flex';
+  document.getElementById('goWeb').onclick = function () { document.getElementById('intro').style.display = 'none'; afterPinGoApp = false; proceed(); };
+  document.getElementById('openApp').onclick = function () { document.getElementById('intro').style.display = 'none'; afterPinGoApp = true; proceed(); };
+  document.getElementById('openApp2').onclick = function () { afterPinGoApp = true; proceed(); };
+  document.getElementById('pinOk').onclick = function () {
+    pin = document.getElementById('pinInput').value.trim();
+    document.getElementById('pinGate').style.display = 'none';
+    finish();
+  };
+
   function connect() {
-    ws = new WebSocket(wsUrl);
+    ws = new WebSocket(fullWsUrl());
     ws.onopen = function () { live.classList.remove('off'); lt.textContent = T.liveOn; ls.textContent = T.liveSub2; };
     ws.onclose = function () { live.classList.add('off'); lt.textContent = T.disconnected; ls.textContent = T.reconnecting; setTimeout(connect, 1000); };
     ws.onerror = function () { ws.close(); };
   }
-  connect();
   function send(msg) { if (ws && ws.readyState === 1) ws.send(msg); }
 
   var pad = document.getElementById('pad'), dot = document.getElementById('dot'),

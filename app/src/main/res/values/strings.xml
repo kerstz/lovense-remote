@@ -25,6 +25,11 @@
     <string name="preset_soft">Doux</string>
     <string name="preset_medium">Moyen</string>
     <string name="preset_strong">Fort</string>
+    <string name="approve_title">Quelqu\'un veut prendre la main</string>
+    <string name="approve_body">Accepte seulement si tu sais qui c\'est. Tu peux couper à tout moment.</string>
+    <string name="action_accept">Accepter</string>
+    <string name="action_refuse">Refuser</string>
+    <string name="pin_label">Code à communiquer : %1$s</string>
     <string name="controlled_title">On te contrôle</string>
     <string name="controlled_count">%1$d connecté(s) · BLE relayé</string>
     <string name="patterns_header">PRÉ-ENREGISTRÉ</string>

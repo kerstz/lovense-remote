@@ -23,6 +23,11 @@
     <string name="preset_soft">Suave</string>
     <string name="preset_medium">Medio</string>
     <string name="preset_strong">Fuerte</string>
+    <string name="approve_title">Alguien quiere el control</string>
+    <string name="approve_body">Acepta solo si sabes quién es. Puedes cortar el acceso cuando quieras.</string>
+    <string name="action_accept">Aceptar</string>
+    <string name="action_refuse">Rechazar</string>
+    <string name="pin_label">Código a compartir: %1$s</string>
     <string name="controlled_title">Te están controlando</string>
     <string name="controlled_count">%1$d conectado(s) · vía BLE</string>
     <string name="patterns_header">PREAJUSTES</string>

@@ -23,6 +23,11 @@
     <string name="preset_soft">Soft</string>
     <string name="preset_medium">Medium</string>
     <string name="preset_strong">Strong</string>
+    <string name="approve_title">Someone wants control</string>
+    <string name="approve_body">Only accept if you know who it is. You can cut access anytime.</string>
+    <string name="action_accept">Accept</string>
+    <string name="action_refuse">Refuse</string>
+    <string name="pin_label">Code to share: %1$s</string>
     <string name="controlled_title">You\'re being controlled</string>
     <string name="controlled_count">%1$d connected · relayed over BLE</string>
     <string name="patterns_header">PRESETS</string>

@@ -39,6 +39,10 @@ class RemoteServer(
     var sessionId: String = ""
         private set
 
+    /** Code PIN exigé du contrôleur (null = pas de PIN). Défini par le moteur. */
+    @Volatile
+    var pin: String? = null
+
     val port: Int = 8787
 
     /** Nombre de contrôleurs actuellement connectés (pour l'écran « On contrôle »). */
@@ -53,6 +57,10 @@ class RemoteServer(
             .replace("__WS_PATH__", "/ws")
     }
 
+    /** HTML servi : on indique à la page si un PIN est requis (par requête). */
+    private fun servedHtml(): String =
+        html.replace("__PIN_REQUIRED__", if (pin != null) "1" else "0")
+
     /**
      * Démarre le serveur. Renvoie false si l'app ne peut pas créer de socket
      * (réseau bloqué par un pare-feu / autorisation réseau coupée) : dans ce cas
@@ -65,11 +73,17 @@ class RemoteServer(
         engine = embeddedServer(CIO, port = port, host = "0.0.0.0") {
             install(WebSockets)
             routing {
-                get("/") { call.respondText(html, ContentType.Text.Html) }
-                get("/s/{id}") { call.respondText(html, ContentType.Text.Html) }
+                get("/") { call.respondText(servedHtml(), ContentType.Text.Html) }
+                get("/s/{id}") { call.respondText(servedHtml(), ContentType.Text.Html) }
                 webSocket("/ws") {
                     // Gate « lien seul » : on rejette les sessions périmées.
                     if (call.request.queryParameters["id"] != sessionId) {
+                        close()
+                        return@webSocket
+                    }
+                    // Gate PIN : code obligatoire pour piloter.
+                    val pinNow = pin
+                    if (pinNow != null && call.request.queryParameters["pin"] != pinNow) {
                         close()
                         return@webSocket
                     }

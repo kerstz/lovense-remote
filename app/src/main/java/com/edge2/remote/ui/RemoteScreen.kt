@@ -79,6 +79,9 @@ fun RemoteScreen(vm: RemoteViewModel, onDisconnect: () -> Unit) {
     val state by vm.connectionState.collectAsStateWithLifecycle()
     val playing by vm.playing.collectAsStateWithLifecycle()
     val controllers by vm.controllers.collectAsStateWithLifecycle()
+    val sharing by vm.sharing.collectAsStateWithLifecycle()
+    val pin by vm.pin.collectAsStateWithLifecycle()
+    val approved by vm.approved.collectAsStateWithLifecycle()
     val levels by vm.actuatorLevels.collectAsStateWithLifecycle()
     val shareUrl by vm.shareUrl.collectAsStateWithLifecycle()
     val tunnelUrl by vm.tunnelUrl.collectAsStateWithLifecycle()
@@ -125,7 +128,7 @@ fun RemoteScreen(vm: RemoteViewModel, onDisconnect: () -> Unit) {
         }
 
         // --- « On contrôle » : un·e partenaire pilote à distance -----------
-        if (controllers > 0) {
+        if (controllers > 0 && approved) {
             Row(
                 Modifier.fillMaxWidth().clip(RoundedCornerShape(15.dp))
                     .background(c.live.copy(alpha = .12f))
@@ -171,10 +174,31 @@ fun RemoteScreen(vm: RemoteViewModel, onDisconnect: () -> Unit) {
             }
             PatternChip("+ Lovense", -1, false, Modifier.weight(1f)) { importOpen = true }
         }
+
+        // --- STOP géant pendant un partage (toujours accessible côté host) -
+        if (sharing) {
+            Text(
+                stringResource(R.string.ctrl_stop_all),
+                color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp, letterSpacing = 2.sp,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
+                    .background(c.danger).clickable { vm.stopAll() }.padding(vertical = 16.dp),
+            )
+        }
     }
 
     if (shareOpen) {
-        ShareDialog(shareUrl, tunnelUrl, tunnelPreparing, shareError) { vm.stopSharing(); shareOpen = false }
+        ShareDialog(shareUrl, tunnelUrl, tunnelPreparing, shareError, pin) { vm.stopSharing(); shareOpen = false }
+    }
+    // Demande d'autorisation quand un contrôleur se connecte (avant de piloter).
+    if (sharing && controllers > 0 && !approved) {
+        AlertDialog(
+            onDismissRequest = { },
+            confirmButton = { TextButton(onClick = { vm.approveControl() }) { Text(stringResource(R.string.action_accept)) } },
+            dismissButton = { TextButton(onClick = { vm.refuseControl() }) { Text(stringResource(R.string.action_refuse)) } },
+            title = { Text(stringResource(R.string.approve_title)) },
+            text = { Text(stringResource(R.string.approve_body)) },
+        )
     }
     if (importOpen) {
         ImportDialog(
@@ -427,7 +451,7 @@ private fun BatteryGlyph(level: Int?) {
 // --- Dialogs (Phase 4B + import) — héritent du thème Edge2 -----------------
 
 @Composable
-private fun ShareDialog(lanUrl: String?, tunnelUrl: String?, tunnelPreparing: Boolean, shareError: Boolean, onDismiss: () -> Unit) {
+private fun ShareDialog(lanUrl: String?, tunnelUrl: String?, tunnelPreparing: Boolean, shareError: Boolean, pin: String?, onDismiss: () -> Unit) {
     val c = Edge2.colors
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -438,6 +462,13 @@ private fun ShareDialog(lanUrl: String?, tunnelUrl: String?, tunnelPreparing: Bo
                 if (shareError) {
                     Text(stringResource(R.string.share_blocked), color = c.danger)
                 } else {
+                    if (pin != null) {
+                        Text(
+                            stringResource(R.string.pin_label, pin),
+                            color = c.base, fontWeight = FontWeight.Bold, fontSize = 16.sp,
+                            fontFamily = JetBrainsMono,
+                        )
+                    }
                     // Internet (SSH/localhost.run) — marche de partout, 4G inclus.
                     when {
                         tunnelUrl != null -> ShareBlock(
