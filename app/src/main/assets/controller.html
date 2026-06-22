@@ -122,17 +122,7 @@
     <div style="font-weight:600;font-size:13px;" id="liveTitle"></div>
     <div style="font-size:11px;color:#7FD9B0;" id="liveSub"></div>
   </div>
-  <button class="appbtn" id="chatBtn">💬</button>
   <button class="appbtn" id="openApp2" data-i18n="openApp2">Ouvrir l'app</button>
-</div>
-
-<!-- Chat (optionnel, masqué par défaut) -->
-<div id="chatPanel" style="display:none;flex-direction:column;gap:6px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:10px;">
-  <div id="chatLog" style="max-height:120px;overflow:auto;display:flex;flex-direction:column;gap:3px;font-size:13px;"></div>
-  <div style="display:flex;gap:6px;">
-    <input id="chatInput" placeholder="Message…" style="flex:1;background:#15151c;border:1px solid #333;border-radius:10px;color:#fff;padding:8px 10px;font-family:'Space Grotesk';">
-    <button id="chatSend" class="appbtn">→</button>
-  </div>
 </div>
 
 <div class="hint" data-i18n="hint">Glisse le point — horizontal = base · vertical = tige</div>
@@ -237,7 +227,6 @@
     ws.onopen = function () { live.classList.remove('off'); lt.textContent = T.liveOn; ls.textContent = T.liveSub2; };
     ws.onclose = function () { live.classList.add('off'); lt.textContent = T.disconnected; ls.textContent = T.reconnecting; setTimeout(connect, 1000); };
     ws.onerror = function () { ws.close(); };
-    ws.onmessage = function (e) { if (typeof e.data === 'string' && e.data.indexOf('C:') === 0) addChat(e.data.slice(2), false); };
   }
   function send(msg) { if (ws && ws.readyState === 1) ws.send(msg); }
 
@@ -274,25 +263,6 @@
   });
 
   document.getElementById('stop').onclick = function () { base = 0; tige = 0; send('S'); render(); };
-
-  // --- Chat optionnel ---
-  function addChat(text, mine) {
-    var log = document.getElementById('chatLog');
-    var d = document.createElement('div');
-    d.textContent = (mine ? '› ' : '‹ ') + text;
-    d.style.color = mine ? '#FF8BA1' : '#A98BFF';
-    log.appendChild(d); log.scrollTop = log.scrollHeight;
-  }
-  document.getElementById('chatBtn').onclick = function () {
-    var p = document.getElementById('chatPanel');
-    p.style.display = (p.style.display === 'none' || !p.style.display) ? 'flex' : 'none';
-  };
-  function chatSend() {
-    var i = document.getElementById('chatInput'), t = i.value.trim();
-    if (!t) return; send('C:' + t); addChat(t, true); i.value = '';
-  }
-  document.getElementById('chatSend').onclick = chatSend;
-  document.getElementById('chatInput').addEventListener('keydown', function (e) { if (e.key === 'Enter') chatSend(); });
 
   render();
 </script>

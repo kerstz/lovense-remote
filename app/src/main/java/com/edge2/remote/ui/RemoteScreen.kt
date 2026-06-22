@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -56,7 +55,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.edge2.remote.R
-import com.edge2.remote.ChatMsg
 import com.edge2.remote.RemoteViewModel
 import com.edge2.remote.ble.ActuatorKind
 import com.edge2.remote.ble.ConnectionState
@@ -86,7 +84,6 @@ fun RemoteScreen(vm: RemoteViewModel, onDisconnect: () -> Unit, onSettings: () -
     val sharing by vm.sharing.collectAsStateWithLifecycle()
     val pin by vm.pin.collectAsStateWithLifecycle()
     val approved by vm.approved.collectAsStateWithLifecycle()
-    val chat by vm.chat.collectAsStateWithLifecycle()
     val levels by vm.actuatorLevels.collectAsStateWithLifecycle()
     val shareUrl by vm.shareUrl.collectAsStateWithLifecycle()
     val tunnelUrl by vm.tunnelUrl.collectAsStateWithLifecycle()
@@ -99,7 +96,6 @@ fun RemoteScreen(vm: RemoteViewModel, onDisconnect: () -> Unit, onSettings: () -
     val battery = connected?.battery
     var shareOpen by remember { mutableStateOf(false) }
     var importOpen by remember { mutableStateOf(false) }
-    var chatOpen by remember { mutableStateOf(false) }
 
     // Dès qu'un contrôleur distant se connecte → on ferme la popup de partage.
     LaunchedEffect(controllers) { if (controllers > 0) shareOpen = false }
@@ -149,8 +145,6 @@ fun RemoteScreen(vm: RemoteViewModel, onDisconnect: () -> Unit, onSettings: () -
                     Text(stringResource(R.string.controlled_title), color = c.ink, fontWeight = FontWeight.Bold, fontSize = 15.sp)
                     Text(stringResource(R.string.controlled_count, controllers), color = c.live, fontSize = 11.sp)
                 }
-                // Chat optionnel.
-                GhostChip(stringResource(R.string.chat_title)) { chatOpen = true }
             }
         }
 
@@ -226,9 +220,6 @@ fun RemoteScreen(vm: RemoteViewModel, onDisconnect: () -> Unit, onSettings: () -
             onImportText = { vm.importFromText(it); importOpen = false },
             onDismiss = { importOpen = false },
         )
-    }
-    if (chatOpen) {
-        ChatDialog(chat, onSend = { vm.sendChat(it) }, onDismiss = { chatOpen = false })
     }
 }
 
@@ -558,43 +549,6 @@ private fun ImportDialog(onImportUrl: (String) -> Unit, onImportText: (String) -
                 OutlinedTextField(
                     value = input, onValueChange = { input = it },
                     label = { Text(stringResource(if (isUrl) R.string.import_label_url else R.string.import_label_any)) },
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
-        },
-    )
-}
-
-@Composable
-private fun ChatDialog(messages: List<ChatMsg>, onSend: (String) -> Unit, onDismiss: () -> Unit) {
-    val c = Edge2.colors
-    var input by remember { mutableStateOf("") }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        confirmButton = {
-            TextButton(onClick = { onSend(input); input = "" }, enabled = input.isNotBlank()) {
-                Text(stringResource(R.string.action_send))
-            }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) } },
-        title = { Text(stringResource(R.string.chat_title)) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Column(
-                    Modifier.fillMaxWidth().heightIn(max = 240.dp).verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    messages.takeLast(50).forEach { m ->
-                        Text(
-                            (if (m.fromHost) "› " else "‹ ") + m.text,
-                            color = if (m.fromHost) c.base else c.tige,
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                    }
-                }
-                OutlinedTextField(
-                    value = input, onValueChange = { input = it },
-                    label = { Text(stringResource(R.string.chat_hint)) },
                     modifier = Modifier.fillMaxWidth(),
                 )
             }

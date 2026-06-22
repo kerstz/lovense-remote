@@ -38,8 +38,6 @@
     <string name="action_accept">Accepter</string>
     <string name="action_refuse">Refuser</string>
     <string name="pin_label">Code à communiquer : %1$s</string>
-    <string name="chat_title">Chat</string>
-    <string name="chat_hint">Message…</string>
     <string name="controlled_title">On te contrôle</string>
     <string name="controlled_count">%1$d connecté(s) · BLE relayé</string>
     <string name="patterns_header">PRÉ-ENREGISTRÉ</string>

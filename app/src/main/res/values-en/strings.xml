@@ -36,8 +36,6 @@
     <string name="action_accept">Accept</string>
     <string name="action_refuse">Refuse</string>
     <string name="pin_label">Code to share: %1$s</string>
-    <string name="chat_title">Chat</string>
-    <string name="chat_hint">Message…</string>
     <string name="controlled_title">You\'re being controlled</string>
     <string name="controlled_count">%1$d connected · relayed over BLE</string>
     <string name="patterns_header">PRESETS</string>

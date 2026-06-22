@@ -33,9 +33,6 @@ import kotlinx.coroutines.launch
  *
  * [RemoteViewModel] n'est qu'un adaptateur mince au-dessus de ce singleton.
  */
-/** Un message de chat (hôte ou contrôleur). */
-data class ChatMsg(val fromHost: Boolean, val text: String)
-
 class RemoteEngine private constructor(context: Context) {
 
     private val appContext = context.applicationContext
@@ -44,24 +41,8 @@ class RemoteEngine private constructor(context: Context) {
     private val ble = Edge2BleManager(appContext)
     private val player = PatternPlayer(ble, scope)
     private val importer = LovenseImporter()
-    private val server = RemoteServer(appContext.assets, { cmd -> applyRemote(cmd) }, ::onChatReceived)
+    private val server = RemoteServer(appContext.assets) { cmd -> applyRemote(cmd) }
     private val tunnel = SshTunnel(appContext, scope)
-
-    // --- Chat optionnel host ↔ contrôleur --------------------------------
-    private val _chat = MutableStateFlow<List<ChatMsg>>(emptyList())
-    val chat: StateFlow<List<ChatMsg>> = _chat.asStateFlow()
-
-    private fun onChatReceived(text: String) {
-        _chat.update { it + ChatMsg(fromHost = false, text = text.take(300)) }
-    }
-
-    /** Envoie un message de chat de l'hôte vers les contrôleurs. */
-    fun sendChat(text: String) {
-        val t = text.trim().take(300)
-        if (t.isEmpty()) return
-        _chat.update { it + ChatMsg(fromHost = true, text = t) }
-        server.broadcastChat(t)
-    }
 
     // --- État exposé -----------------------------------------------------
     val connectionState = ble.connectionState
@@ -253,7 +234,6 @@ class RemoteEngine private constructor(context: Context) {
         _tunnelConnected.value = false
         _tunnelPreparing.value = false
         _shareError.value = false
-        _chat.value = emptyList()
     }
 
     fun importFromUrl(url: String) {

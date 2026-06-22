@@ -14,13 +14,10 @@ import io.ktor.server.websocket.webSocket
 import io.ktor.websocket.Frame
 import io.ktor.websocket.close
 import io.ktor.websocket.readText
-import io.ktor.websocket.send
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.launch
 import kotlin.random.Random
 
 /**
@@ -37,13 +34,7 @@ import kotlin.random.Random
 class RemoteServer(
     private val assets: AssetManager,
     private val onCommand: (RemoteCommand) -> Unit,
-    private val onChat: (String) -> Unit = {},
 ) {
-    /** Messages chat hôte→contrôleurs (diffusés aux WS ouverts). */
-    private val hostToCtrl = MutableSharedFlow<String>(extraBufferCapacity = 32)
-
-    /** Diffuse un message de chat de l'hôte vers tous les contrôleurs. */
-    fun broadcastChat(text: String) { hostToCtrl.tryEmit("C:$text") }
     @Volatile
     var sessionId: String = ""
         private set
@@ -97,18 +88,13 @@ class RemoteServer(
                         return@webSocket
                     }
                     _controllers.update { it + 1 }
-                    // Pousse les messages chat de l'hôte vers ce contrôleur.
-                    val chatJob = launch { hostToCtrl.collect { send(Frame.Text(it)) } }
                     try {
                         for (frame in incoming) {
                             if (frame is Frame.Text) {
-                                val t = frame.readText()
-                                if (t.startsWith("C:")) onChat(t.removePrefix("C:"))
-                                else RemoteCommand.parse(t)?.let(onCommand)
+                                RemoteCommand.parse(frame.readText())?.let(onCommand)
                             }
                         }
                     } finally {
-                        chatJob.cancel()
                         _controllers.update { it - 1 }
                     }
                 }
