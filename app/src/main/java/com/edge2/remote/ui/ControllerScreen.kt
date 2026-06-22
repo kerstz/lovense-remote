@@ -29,11 +29,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.edge2.remote.R
 import com.edge2.remote.remote.RemoteCommand
 import com.edge2.remote.remote.RemoteController
 import com.edge2.remote.ui.theme.Edge2
@@ -82,31 +84,31 @@ fun ControllerScreen(wsUrl: String) {
         ) {
             Box(Modifier.size(10.dp).clip(CircleShape).background(if (connected) c.live else c.muted))
             Column(Modifier.weight(1f)) {
-                Text(if (connected) "En direct · tu as le contrôle" else "Connexion au toy distant…", color = c.ink, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
-                Text("Contrôle à distance de l'Edge 2", color = if (connected) c.live else c.muted, fontSize = 11.sp)
+                Text(if (connected) stringResource(R.string.ctrl_live) else stringResource(R.string.ctrl_connecting), color = c.ink, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                Text(stringResource(R.string.ctrl_sub), color = if (connected) c.live else c.muted, fontSize = 11.sp)
             }
         }
 
-        Text("Glisse le point — horizontal = base · vertical = tige", color = c.muted, fontSize = 11.sp)
+        Text(stringResource(R.string.hint_xy), color = c.muted, fontSize = 11.sp)
 
         XYPad(base = base, tige = tige, onChange = ::applyXY, enabled = connected, modifier = Modifier.fillMaxWidth().aspectRatio(1f))
 
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(11.dp)) {
-            CtrlReadout("BASE", c.base, (base * 100).roundToInt())
-            CtrlReadout("TIGE", c.tige, (tige * 100).roundToInt())
+            CtrlReadout(stringResource(R.string.label_base), c.base, (base * 100).roundToInt())
+            CtrlReadout(stringResource(R.string.label_tige), c.tige, (tige * 100).roundToInt())
         }
 
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(9.dp), verticalAlignment = Alignment.CenterVertically) {
             CtrlLink(link) { link = !link }
-            CtrlPreset("Doux", Modifier.weight(1f)) { preset(0.30f) }
-            CtrlPreset("Moyen", Modifier.weight(1f)) { preset(0.60f) }
-            CtrlPreset("Fort", Modifier.weight(1f)) { preset(0.90f) }
+            CtrlPreset(stringResource(R.string.preset_soft), Modifier.weight(1f)) { preset(0.30f) }
+            CtrlPreset(stringResource(R.string.preset_medium), Modifier.weight(1f)) { preset(0.60f) }
+            CtrlPreset(stringResource(R.string.preset_strong), Modifier.weight(1f)) { preset(0.90f) }
         }
 
         Spacer(Modifier.weight(1f))
 
         Text(
-            "TOUT ARRÊTER", color = c.danger, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, letterSpacing = 2.5.sp,
+            stringResource(R.string.ctrl_stop_all), color = c.danger, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, letterSpacing = 2.5.sp,
             textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(15.dp))
                 .background(c.danger.copy(alpha = .10f))

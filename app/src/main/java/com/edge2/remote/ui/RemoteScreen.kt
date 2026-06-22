@@ -43,10 +43,12 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.edge2.remote.R
 import com.edge2.remote.RemoteViewModel
 import com.edge2.remote.ble.ActuatorKind
 import com.edge2.remote.ble.ConnectionState
@@ -95,18 +97,18 @@ fun RemoteScreen(vm: RemoteViewModel, onDisconnect: () -> Unit) {
                 Text(toy.displayName, color = c.ink, fontWeight = FontWeight.Bold, fontSize = 21.sp)
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Box(Modifier.size(7.dp).clip(CircleShape).background(c.live))
-                    Text("Connecté · BLE direct", color = c.live, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                    Text(stringResource(R.string.status_connected), color = c.live, fontSize = 11.sp, fontWeight = FontWeight.Medium)
                 }
             }
             Column(horizontalAlignment = Alignment.End) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     BatteryGlyph(battery)
-                    Text(battery?.let { "$it% batterie" } ?: "BLE", color = c.muted, fontFamily = JetBrainsMono, fontWeight = FontWeight.Medium, fontSize = 11.sp)
+                    Text(battery?.let { stringResource(R.string.battery_fmt, it) } ?: "BLE", color = c.muted, fontFamily = JetBrainsMono, fontWeight = FontWeight.Medium, fontSize = 11.sp)
                 }
                 Spacer(Modifier.size(6.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    GhostChip("Partager") { vm.startSharing(); shareOpen = true }
-                    GhostChip("Couper") { onDisconnect() }
+                    GhostChip(stringResource(R.string.action_share)) { vm.startSharing(); shareOpen = true }
+                    GhostChip(stringResource(R.string.action_disconnect)) { onDisconnect() }
                 }
             }
         }
@@ -120,7 +122,7 @@ fun RemoteScreen(vm: RemoteViewModel, onDisconnect: () -> Unit) {
 
         // --- Patterns pré-enregistrés (pilotent les actionneurs 0/1) -------
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Text("PRÉ-ENREGISTRÉ", color = c.faint, fontWeight = FontWeight.SemiBold, fontSize = 10.sp, letterSpacing = 2.5.sp)
+            Text(stringResource(R.string.patterns_header), color = c.faint, fontWeight = FontWeight.SemiBold, fontSize = 10.sp, letterSpacing = 2.5.sp)
             if (playing != null) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -128,7 +130,7 @@ fun RemoteScreen(vm: RemoteViewModel, onDisconnect: () -> Unit) {
                     modifier = Modifier.clickable { vm.stopAll() },
                 ) {
                     Box(Modifier.size(6.dp).clip(CircleShape).background(c.live))
-                    Text("EN LECTURE · STOP", color = c.live, fontWeight = FontWeight.SemiBold, fontSize = 10.sp, letterSpacing = 1.sp)
+                    Text(stringResource(R.string.playing_stop), color = c.live, fontWeight = FontWeight.SemiBold, fontSize = 10.sp, letterSpacing = 1.sp)
                 }
             }
         }
@@ -171,17 +173,17 @@ private fun DualVibrateControls(vm: RemoteViewModel, playing: Boolean, levels: L
     }
     fun preset(f: Float) { localBase = f; localTige = f; vm.setBoth(f) }
 
-    Text("Glisse le point — horizontal = base · vertical = tige", color = c.muted, fontSize = 11.sp, modifier = Modifier.fillMaxWidth())
+    Text(stringResource(R.string.hint_xy), color = c.muted, fontSize = 11.sp, modifier = Modifier.fillMaxWidth())
     XYPad(base = baseF, tige = tigeF, onChange = ::applyXY, modifier = Modifier.fillMaxWidth().aspectRatio(1f))
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(11.dp)) {
-        Readout("BASE", c.base, (baseF * 100).roundToInt())
-        Readout("TIGE", c.tige, (tigeF * 100).roundToInt())
+        Readout(stringResource(R.string.label_base), c.base, (baseF * 100).roundToInt())
+        Readout(stringResource(R.string.label_tige), c.tige, (tigeF * 100).roundToInt())
     }
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(9.dp), verticalAlignment = Alignment.CenterVertically) {
         LinkToggle(link) { vm.toggleLink() }
-        PresetButton("Doux", Modifier.weight(1f)) { preset(0.30f) }
-        PresetButton("Moyen", Modifier.weight(1f)) { preset(0.60f) }
-        PresetButton("Fort", Modifier.weight(1f)) { preset(0.90f) }
+        PresetButton(stringResource(R.string.preset_soft), Modifier.weight(1f)) { preset(0.30f) }
+        PresetButton(stringResource(R.string.preset_medium), Modifier.weight(1f)) { preset(0.60f) }
+        PresetButton(stringResource(R.string.preset_strong), Modifier.weight(1f)) { preset(0.90f) }
     }
 }
 
@@ -191,7 +193,7 @@ private fun ActuatorControls(vm: RemoteViewModel, toy: ToyType, playing: Boolean
     val c = Edge2.colors
     val local = remember(toy) { mutableStateListOf<Float>().apply { repeat(toy.actuators.size) { add(0f) } } }
 
-    Text("Règle chaque moteur du ${toy.displayName}.", color = c.muted, fontSize = 11.sp, modifier = Modifier.fillMaxWidth())
+    Text(stringResource(R.string.hint_actuators, toy.displayName), color = c.muted, fontSize = 11.sp, modifier = Modifier.fillMaxWidth())
     toy.actuators.forEachIndexed { i, act ->
         val accent = when (act.kind) {
             ActuatorKind.VIBRATE, ActuatorKind.VIBRATE1 -> c.base
@@ -200,18 +202,28 @@ private fun ActuatorControls(vm: RemoteViewModel, toy: ToyType, playing: Boolean
         }
         val value = if (playing && i < levels.size) levels[i] / act.max.toFloat() else local.getOrElse(i) { 0f }
         ActuatorSlider(
-            label = act.label, accent = accent, fraction = value, percent = (value * 100).roundToInt(),
+            label = kindLabel(act.kind), accent = accent, fraction = value, percent = (value * 100).roundToInt(),
             reversible = act.reversible, onReverse = { vm.reverse(i) },
             onChange = { f -> if (i < local.size) local[i] = f; vm.setActuator(i, f) },
         )
     }
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(9.dp)) {
         fun all(f: Float) { for (i in local.indices) local[i] = f; vm.setBoth(f) }
-        PresetButton("Doux", Modifier.weight(1f)) { all(0.30f) }
-        PresetButton("Moyen", Modifier.weight(1f)) { all(0.60f) }
-        PresetButton("Fort", Modifier.weight(1f)) { all(0.90f) }
+        PresetButton(stringResource(R.string.preset_soft), Modifier.weight(1f)) { all(0.30f) }
+        PresetButton(stringResource(R.string.preset_medium), Modifier.weight(1f)) { all(0.60f) }
+        PresetButton(stringResource(R.string.preset_strong), Modifier.weight(1f)) { all(0.90f) }
     }
 }
+
+/** Libellé localisé d'un type d'actionneur. */
+@Composable
+private fun kindLabel(kind: ActuatorKind): String = stringResource(
+    when (kind) {
+        ActuatorKind.VIBRATE, ActuatorKind.VIBRATE1, ActuatorKind.VIBRATE2 -> R.string.kind_vibrate
+        ActuatorKind.ROTATE -> R.string.kind_rotate
+        ActuatorKind.AIR -> R.string.kind_air
+    },
+)
 
 @Composable
 private fun ActuatorSlider(
@@ -236,7 +248,7 @@ private fun ActuatorSlider(
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 if (reversible) {
                     Text(
-                        "⟲ sens", color = accent, fontWeight = FontWeight.SemiBold, fontSize = 11.sp,
+                        stringResource(R.string.actuator_reverse), color = accent, fontWeight = FontWeight.SemiBold, fontSize = 11.sp,
                         modifier = Modifier.clip(RoundedCornerShape(9.dp)).border(1.dp, accent.copy(alpha = .4f), RoundedCornerShape(9.dp))
                             .clickable { onReverse() }.padding(horizontal = 9.dp, vertical = 4.dp),
                     )
@@ -389,19 +401,19 @@ private fun BatteryGlyph(level: Int?) {
 private fun ShareDialog(lanUrl: String?, tunnelUrl: String?, tunnelConnected: Boolean, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Arrêter le partage") } },
-        title = { Text("Contrôle à distance") },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.share_stop)) } },
+        title = { Text(stringResource(R.string.share_title)) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 if (tunnelUrl != null) {
-                    val s = if (tunnelConnected) "relais connecté ✓" else "connexion au relais…"
-                    ShareBlock("Internet — $s", "Ouvre ce lien de N'IMPORTE OÙ (4G/autre réseau) :", tunnelUrl)
+                    val title = if (tunnelConnected) stringResource(R.string.share_internet_connected) else stringResource(R.string.share_internet_connecting)
+                    ShareBlock(title, stringResource(R.string.share_internet_hint), tunnelUrl)
                 }
                 when {
-                    lanUrl != null -> ShareBlock("Même WiFi (LAN)", "Plus réactif sur le même WiFi :", lanUrl)
-                    tunnelUrl == null -> Text("Aucun WiFi détecté et tunnel non configuré. Connecte un WiFi, ou règle RelayConfig.BASE_URL.")
+                    lanUrl != null -> ShareBlock(stringResource(R.string.share_lan_title), stringResource(R.string.share_lan_hint), lanUrl)
+                    tunnelUrl == null -> Text(stringResource(R.string.share_none))
                 }
-                Text("Tant que ce partage est ouvert, qui a le lien pilote le toy.", style = MaterialTheme.typography.bodySmall)
+                Text(stringResource(R.string.share_warn), style = MaterialTheme.typography.bodySmall)
             }
         },
     )
@@ -414,7 +426,7 @@ private fun ShareBlock(title: String, hint: String, url: String) {
         Text(hint, style = MaterialTheme.typography.bodySmall)
         Text(url, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
         val qr = remember(url) { NetworkUtils.qrBitmap(url, 480).asImageBitmap() }
-        Image(bitmap = qr, contentDescription = "QR du lien de contrôle", modifier = Modifier.size(200.dp))
+        Image(bitmap = qr, contentDescription = stringResource(R.string.qr_desc), modifier = Modifier.size(200.dp))
     }
 }
 
@@ -425,16 +437,16 @@ private fun ImportDialog(onImportUrl: (String) -> Unit, onImportText: (String) -
     AlertDialog(
         onDismissRequest = onDismiss,
         confirmButton = {
-            TextButton(onClick = { if (isUrl) onImportUrl(input) else onImportText(input) }, enabled = input.isNotBlank()) { Text("Importer") }
+            TextButton(onClick = { if (isUrl) onImportUrl(input) else onImportText(input) }, enabled = input.isNotBlank()) { Text(stringResource(R.string.action_import)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Annuler") } },
-        title = { Text("Importer un pattern Lovense") },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) } },
+        title = { Text(stringResource(R.string.import_title)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Colle une URL .ta publique (CDN Lovense) OU le contenu .ta brut.", style = MaterialTheme.typography.bodySmall)
+                Text(stringResource(R.string.import_hint), style = MaterialTheme.typography.bodySmall)
                 OutlinedTextField(
                     value = input, onValueChange = { input = it },
-                    label = { Text(if (isUrl) "URL .ta" else "URL ou contenu .ta") },
+                    label = { Text(stringResource(if (isUrl) R.string.import_label_url else R.string.import_label_any)) },
                     modifier = Modifier.fillMaxWidth(),
                 )
             }

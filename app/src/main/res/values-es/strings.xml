@@ -1,0 +1,73 @@
+<resources>
+    <!-- Pantalla de conexión -->
+    <string name="conn_eyebrow">LOVENSE · MANDO</string>
+    <string name="conn_title">Elige tu juguete</string>
+    <string name="conn_connecting">Conectando…</string>
+    <string name="conn_searching">Buscando juguetes cercanos…</string>
+    <string name="conn_count">%1$d juguete(s) visible(s)</string>
+    <string name="conn_empty">Aún no hay juguetes. Enciéndelo (mantén 3 s) y acércalo.</string>
+    <string name="conn_retry">Reintentar</string>
+    <string name="conn_footer">Activa el Bluetooth y la ubicación si se solicita.\nSolo aparecen los juguetes encendidos y cercanos.</string>
+    <string name="device_signal">%1$d dBm · BLE directo</string>
+    <string name="action_connect">Conectar</string>
+
+    <!-- Pantalla principal -->
+    <string name="status_connected">Conectado · BLE directo</string>
+    <string name="battery_fmt">%1$d%% batería</string>
+    <string name="action_share">Compartir</string>
+    <string name="action_disconnect">Desconectar</string>
+    <string name="hint_xy">Arrastra el punto — horizontal = base · vertical = eje</string>
+    <string name="hint_actuators">Ajusta cada motor del %1$s.</string>
+    <string name="label_base">BASE</string>
+    <string name="label_tige">EJE</string>
+    <string name="preset_soft">Suave</string>
+    <string name="preset_medium">Medio</string>
+    <string name="preset_strong">Fuerte</string>
+    <string name="patterns_header">PREAJUSTES</string>
+    <string name="playing_stop">REPRODUCIENDO · STOP</string>
+    <string name="actuator_reverse">⟲ sentido</string>
+    <string name="kind_vibrate">Vibración</string>
+    <string name="kind_rotate">Rotación</string>
+    <string name="kind_air">Succión</string>
+
+    <!-- Control remoto -->
+    <string name="share_title">Control remoto</string>
+    <string name="share_stop">Dejar de compartir</string>
+    <string name="share_internet_connected">Internet — relé conectado ✓</string>
+    <string name="share_internet_connecting">Internet — conectando al relé…</string>
+    <string name="share_internet_hint">Abre este enlace desde CUALQUIER LUGAR (datos/otra red):</string>
+    <string name="share_lan_title">Misma WiFi (LAN)</string>
+    <string name="share_lan_hint">Más reactivo en la misma WiFi:</string>
+    <string name="share_none">No se detecta WiFi y el túnel no está configurado. Conecta a una WiFi o ajusta RelayConfig.BASE_URL.</string>
+    <string name="share_warn">Mientras este enlace esté abierto, quien lo tenga controla el juguete.</string>
+    <string name="qr_desc">Código QR del enlace de control</string>
+
+    <!-- Importar patrón -->
+    <string name="import_title">Importar un patrón Lovense</string>
+    <string name="import_hint">Pega una URL .ta pública (CDN Lovense) O el contenido .ta sin procesar.</string>
+    <string name="import_label_url">URL .ta</string>
+    <string name="import_label_any">URL o contenido .ta</string>
+    <string name="action_import">Importar</string>
+    <string name="action_cancel">Cancelar</string>
+
+    <!-- Pantalla de controlador (enlace remoto) -->
+    <string name="ctrl_live">En vivo · tienes el control</string>
+    <string name="ctrl_connecting">Conectando al juguete remoto…</string>
+    <string name="ctrl_sub">Control remoto</string>
+    <string name="ctrl_stop_all">PARAR TODO</string>
+
+    <!-- Errores BLE -->
+    <string name="err_perms">Faltan permisos de Bluetooth</string>
+    <string name="err_bt_off">Bluetooth desactivado</string>
+    <string name="err_scanner">Escáner BLE no disponible</string>
+    <string name="err_scan_failed">Escaneo fallido (código %1$d)</string>
+    <string name="err_discovery">Fallo al descubrir servicios</string>
+    <string name="err_chars">Características Lovense no encontradas</string>
+    <string name="err_notif">No se pudieron activar las notificaciones</string>
+    <string name="err_device_gone">Dispositivo no encontrado</string>
+
+    <!-- Notificación del servicio en primer plano -->
+    <string name="notif_channel">Estado de la conexión</string>
+    <string name="notif_text">Conectado · control activo</string>
+    <string name="notif_stop">Desconectar</string>
+</resources>

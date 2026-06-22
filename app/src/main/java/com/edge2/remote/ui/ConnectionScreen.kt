@@ -35,10 +35,12 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.edge2.remote.R
 import com.edge2.remote.ble.ConnectionState
 import com.edge2.remote.ble.DiscoveredToy
 import com.edge2.remote.ui.theme.Edge2
@@ -122,11 +124,11 @@ fun ConnectionScreen(
                 Modifier.size(30.dp).clip(RoundedCornerShape(9.dp))
                     .background(Brush.linearGradient(listOf(c.gradStart, c.gradEnd))),
             )
-            Text("LOVENSE · TÉLÉCOMMANDE", color = c.muted, fontWeight = FontWeight.Bold, fontSize = 12.sp, letterSpacing = 3.sp)
+            Text(stringResource(R.string.conn_eyebrow), color = c.muted, fontWeight = FontWeight.Bold, fontSize = 12.sp, letterSpacing = 3.sp)
         }
 
         Spacer(Modifier.size(4.dp))
-        Text("Choisis ton jouet", color = c.ink, fontWeight = FontWeight.Bold, fontSize = 26.sp)
+        Text(stringResource(R.string.conn_title), color = c.ink, fontWeight = FontWeight.Bold, fontSize = 26.sp)
 
         PulseOrb(active = !connecting, modifier = Modifier.size(140.dp).align(Alignment.CenterHorizontally))
 
@@ -140,9 +142,9 @@ fun ConnectionScreen(
             Text(
                 when {
                     error != null -> error.reason
-                    connecting -> "Connexion…"
-                    discovered.isEmpty() -> "Recherche de jouets à proximité…"
-                    else -> "${discovered.size} jouet(s) visible(s)"
+                    connecting -> stringResource(R.string.conn_connecting)
+                    discovered.isEmpty() -> stringResource(R.string.conn_searching)
+                    else -> stringResource(R.string.conn_count, discovered.size)
                 },
                 color = if (error != null) c.danger else c.muted, fontSize = 12.sp,
             )
@@ -151,7 +153,7 @@ fun ConnectionScreen(
         // Liste des toys visibles.
         if (discovered.isEmpty()) {
             Text(
-                "Aucun jouet pour l'instant. Allume-le (appui long 3 s) et rapproche-le.",
+                stringResource(R.string.conn_empty),
                 color = c.faint, fontSize = 12.sp,
                 modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
             )
@@ -165,14 +167,14 @@ fun ConnectionScreen(
 
         if (error != null) {
             Text(
-                "Réessayer", color = c.ink, fontWeight = FontWeight.SemiBold, fontSize = 13.sp,
+                stringResource(R.string.conn_retry), color = c.ink, fontWeight = FontWeight.SemiBold, fontSize = 13.sp,
                 modifier = Modifier.align(Alignment.CenterHorizontally)
                     .clip(RoundedCornerShape(12.dp)).border(1.dp, c.outline, RoundedCornerShape(12.dp))
                     .clickable { onScan() }.padding(horizontal = 18.dp, vertical = 10.dp),
             )
         }
         Text(
-            "Active le Bluetooth et la localisation si demandé.\nSeuls les jouets allumés et proches apparaissent.",
+            stringResource(R.string.conn_footer),
             color = c.faint, fontSize = 11.sp, textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth(),
         )
@@ -204,13 +206,13 @@ private fun DeviceCard(toy: DiscoveredToy, connecting: Boolean, onClick: () -> U
         }
         Column(Modifier.weight(1f)) {
             Text(toy.displayName, color = c.ink, fontWeight = FontWeight.Bold, fontSize = 15.sp)
-            Text("${toy.rssi} dBm · BLE direct", color = c.muted, fontFamily = JetBrainsMono, fontSize = 11.sp)
+            Text(stringResource(R.string.device_signal, toy.rssi), color = c.muted, fontFamily = JetBrainsMono, fontSize = 11.sp)
         }
         if (connecting) {
             CircularProgressIndicator(Modifier.size(22.dp), color = Color.White, strokeWidth = 3.dp)
         } else {
             Text(
-                "Connecter", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 12.sp,
+                stringResource(R.string.action_connect), color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 12.sp,
                 modifier = Modifier.clip(RoundedCornerShape(11.dp)).background(c.gradStart).padding(horizontal = 15.dp, vertical = 9.dp),
             )
         }

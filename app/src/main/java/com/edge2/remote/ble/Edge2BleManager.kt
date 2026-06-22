@@ -16,6 +16,7 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.content.ContextCompat
+import com.edge2.remote.R
 import java.util.concurrent.atomic.AtomicIntegerArray
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -59,6 +60,9 @@ class Edge2BleManager(context: Context) {
 
     private val appContext = context.applicationContext
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    /** Chaîne localisée (les messages d'erreur sont affichés à l'écran). */
+    private fun str(resId: Int, vararg args: Any): String = appContext.getString(resId, *args)
 
     private val bluetoothManager =
         appContext.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
@@ -114,12 +118,12 @@ class Edge2BleManager(context: Context) {
     /** Démarre la découverte : scanne et publie les toys visibles dans [discovered]. */
     fun startDiscovery() {
         if (!hasPermissions()) {
-            _connectionState.value = ConnectionState.Error("Permissions BLE manquantes")
+            _connectionState.value = ConnectionState.Error(str(R.string.err_perms))
             return
         }
         val a = adapter
         if (a == null || !a.isEnabled) {
-            _connectionState.value = ConnectionState.Error("Bluetooth désactivé")
+            _connectionState.value = ConnectionState.Error(str(R.string.err_bt_off))
             return
         }
         if (_connectionState.value is ConnectionState.Connected ||
@@ -140,7 +144,7 @@ class Edge2BleManager(context: Context) {
         this.toy = ToyRegistry.byBleName(toy.bleName)
         stopScan()
         val device = runCatching { a.getRemoteDevice(toy.address) }.getOrNull() ?: run {
-            _connectionState.value = ConnectionState.Error("Appareil introuvable")
+            _connectionState.value = ConnectionState.Error(str(R.string.err_device_gone))
             return
         }
         chosenDevice = device
@@ -216,13 +220,13 @@ class Edge2BleManager(context: Context) {
         }
 
         override fun onScanFailed(errorCode: Int) {
-            _connectionState.value = ConnectionState.Error("Scan échoué (code $errorCode)")
+            _connectionState.value = ConnectionState.Error(str(R.string.err_scan_failed, errorCode))
         }
     }
 
     private fun startScan() {
         val scanner = adapter?.bluetoothLeScanner ?: run {
-            _connectionState.value = ConnectionState.Error("Scanner BLE indisponible")
+            _connectionState.value = ConnectionState.Error(str(R.string.err_scanner))
             return
         }
         _connectionState.value = ConnectionState.Scanning

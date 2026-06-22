@@ -1,3 +1,75 @@
 <resources>
     <string name="app_name">Edge2 Remote</string>
+
+    <!-- Écran connexion -->
+    <string name="conn_eyebrow">LOVENSE · TÉLÉCOMMANDE</string>
+    <string name="conn_title">Choisis ton jouet</string>
+    <string name="conn_connecting">Connexion…</string>
+    <string name="conn_searching">Recherche de jouets à proximité…</string>
+    <string name="conn_count">%1$d jouet(s) visible(s)</string>
+    <string name="conn_empty">Aucun jouet pour l\'instant. Allume-le (appui long 3 s) et rapproche-le.</string>
+    <string name="conn_retry">Réessayer</string>
+    <string name="conn_footer">Active le Bluetooth et la localisation si demandé.\nSeuls les jouets allumés et proches apparaissent.</string>
+    <string name="device_signal">%1$d dBm · BLE direct</string>
+    <string name="action_connect">Connecter</string>
+
+    <!-- Écran principal -->
+    <string name="status_connected">Connecté · BLE direct</string>
+    <string name="battery_fmt">%1$d%% batterie</string>
+    <string name="action_share">Partager</string>
+    <string name="action_disconnect">Couper</string>
+    <string name="hint_xy">Glisse le point — horizontal = base · vertical = tige</string>
+    <string name="hint_actuators">Règle chaque moteur du %1$s.</string>
+    <string name="label_base">BASE</string>
+    <string name="label_tige">TIGE</string>
+    <string name="preset_soft">Doux</string>
+    <string name="preset_medium">Moyen</string>
+    <string name="preset_strong">Fort</string>
+    <string name="patterns_header">PRÉ-ENREGISTRÉ</string>
+    <string name="playing_stop">EN LECTURE · STOP</string>
+    <string name="actuator_reverse">⟲ sens</string>
+    <string name="kind_vibrate">Vibration</string>
+    <string name="kind_rotate">Rotation</string>
+    <string name="kind_air">Succion</string>
+
+    <!-- Partage à distance -->
+    <string name="share_title">Contrôle à distance</string>
+    <string name="share_stop">Arrêter le partage</string>
+    <string name="share_internet_connected">Internet — relais connecté ✓</string>
+    <string name="share_internet_connecting">Internet — connexion au relais…</string>
+    <string name="share_internet_hint">Ouvre ce lien de N\'IMPORTE OÙ (4G/autre réseau) :</string>
+    <string name="share_lan_title">Même WiFi (LAN)</string>
+    <string name="share_lan_hint">Plus réactif sur le même WiFi :</string>
+    <string name="share_none">Aucun WiFi détecté et tunnel non configuré. Connecte un WiFi, ou règle RelayConfig.BASE_URL.</string>
+    <string name="share_warn">Tant que ce partage est ouvert, qui a le lien pilote le toy.</string>
+    <string name="qr_desc">QR du lien de contrôle</string>
+
+    <!-- Import de patterns -->
+    <string name="import_title">Importer un pattern Lovense</string>
+    <string name="import_hint">Colle une URL .ta publique (CDN Lovense) OU le contenu .ta brut.</string>
+    <string name="import_label_url">URL .ta</string>
+    <string name="import_label_any">URL ou contenu .ta</string>
+    <string name="action_import">Importer</string>
+    <string name="action_cancel">Annuler</string>
+
+    <!-- Écran contrôleur (lien distant) -->
+    <string name="ctrl_live">En direct · tu as le contrôle</string>
+    <string name="ctrl_connecting">Connexion au toy distant…</string>
+    <string name="ctrl_sub">Contrôle à distance</string>
+    <string name="ctrl_stop_all">TOUT ARRÊTER</string>
+
+    <!-- Erreurs BLE -->
+    <string name="err_perms">Permissions BLE manquantes</string>
+    <string name="err_bt_off">Bluetooth désactivé</string>
+    <string name="err_scanner">Scanner BLE indisponible</string>
+    <string name="err_scan_failed">Scan échoué (code %1$d)</string>
+    <string name="err_discovery">Découverte des services échouée</string>
+    <string name="err_chars">Caractéristiques Lovense introuvables</string>
+    <string name="err_notif">Activation notifications échouée</string>
+    <string name="err_device_gone">Appareil introuvable</string>
+
+    <!-- Notification service premier-plan -->
+    <string name="notif_channel">État de la connexion</string>
+    <string name="notif_text">Connecté · contrôle actif</string>
+    <string name="notif_stop">Couper</string>
 </resources>

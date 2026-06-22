@@ -1,0 +1,73 @@
+<resources>
+    <!-- Connection screen -->
+    <string name="conn_eyebrow">LOVENSE · REMOTE</string>
+    <string name="conn_title">Choose your toy</string>
+    <string name="conn_connecting">Connecting…</string>
+    <string name="conn_searching">Searching for nearby toys…</string>
+    <string name="conn_count">%1$d toy(s) found</string>
+    <string name="conn_empty">No toys yet. Turn it on (hold 3 s) and bring it closer.</string>
+    <string name="conn_retry">Retry</string>
+    <string name="conn_footer">Turn on Bluetooth, and location if prompted.\nOnly toys that are on and nearby appear here.</string>
+    <string name="device_signal">%1$d dBm · direct BLE</string>
+    <string name="action_connect">Connect</string>
+
+    <!-- Main screen -->
+    <string name="status_connected">Connected · direct BLE</string>
+    <string name="battery_fmt">%1$d%% battery</string>
+    <string name="action_share">Share</string>
+    <string name="action_disconnect">Disconnect</string>
+    <string name="hint_xy">Drag the dot — horizontal = base · vertical = shaft</string>
+    <string name="hint_actuators">Adjust each motor of the %1$s.</string>
+    <string name="label_base">BASE</string>
+    <string name="label_tige">SHAFT</string>
+    <string name="preset_soft">Soft</string>
+    <string name="preset_medium">Medium</string>
+    <string name="preset_strong">Strong</string>
+    <string name="patterns_header">PRESETS</string>
+    <string name="playing_stop">PLAYING · STOP</string>
+    <string name="actuator_reverse">⟲ dir</string>
+    <string name="kind_vibrate">Vibration</string>
+    <string name="kind_rotate">Rotation</string>
+    <string name="kind_air">Suction</string>
+
+    <!-- Remote sharing -->
+    <string name="share_title">Remote control</string>
+    <string name="share_stop">Stop sharing</string>
+    <string name="share_internet_connected">Internet — relay connected ✓</string>
+    <string name="share_internet_connecting">Internet — connecting to relay…</string>
+    <string name="share_internet_hint">Open this link from ANYWHERE (mobile data/other network):</string>
+    <string name="share_lan_title">Same WiFi (LAN)</string>
+    <string name="share_lan_hint">More responsive on the same WiFi:</string>
+    <string name="share_none">No WiFi detected and tunnel not configured. Connect to WiFi, or set RelayConfig.BASE_URL.</string>
+    <string name="share_warn">While this share is open, whoever has the link controls the toy.</string>
+    <string name="qr_desc">Control link QR code</string>
+
+    <!-- Pattern import -->
+    <string name="import_title">Import a Lovense pattern</string>
+    <string name="import_hint">Paste a public .ta URL (Lovense CDN) OR the raw .ta content.</string>
+    <string name="import_label_url">.ta URL</string>
+    <string name="import_label_any">.ta URL or content</string>
+    <string name="action_import">Import</string>
+    <string name="action_cancel">Cancel</string>
+
+    <!-- Controller screen (remote link) -->
+    <string name="ctrl_live">Live · you have control</string>
+    <string name="ctrl_connecting">Connecting to remote toy…</string>
+    <string name="ctrl_sub">Remote control</string>
+    <string name="ctrl_stop_all">STOP ALL</string>
+
+    <!-- BLE errors -->
+    <string name="err_perms">Missing Bluetooth permissions</string>
+    <string name="err_bt_off">Bluetooth is off</string>
+    <string name="err_scanner">BLE scanner unavailable</string>
+    <string name="err_scan_failed">Scan failed (code %1$d)</string>
+    <string name="err_discovery">Service discovery failed</string>
+    <string name="err_chars">Lovense characteristics not found</string>
+    <string name="err_notif">Failed to enable notifications</string>
+    <string name="err_device_gone">Device not found</string>
+
+    <!-- Foreground service notification -->
+    <string name="notif_channel">Connection status</string>
+    <string name="notif_text">Connected · control active</string>
+    <string name="notif_stop">Disconnect</string>
+</resources>

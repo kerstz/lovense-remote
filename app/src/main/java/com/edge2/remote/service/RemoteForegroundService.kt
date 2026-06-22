@@ -56,10 +56,10 @@ class RemoteForegroundService : Service() {
         return NotificationCompat.Builder(this, CHANNEL)
             .setSmallIcon(R.drawable.ic_stat_remote)
             .setContentTitle(name)
-            .setContentText("Connecté · contrôle actif")
+            .setContentText(getString(R.string.notif_text))
             .setOngoing(true)
             .setContentIntent(open)
-            .addAction(0, "Couper", stop)
+            .addAction(0, getString(R.string.notif_stop), stop)
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
             .build()
     }
@@ -68,7 +68,7 @@ class RemoteForegroundService : Service() {
         val mgr = getSystemService(NotificationManager::class.java)
         if (mgr.getNotificationChannel(CHANNEL) == null) {
             mgr.createNotificationChannel(
-                NotificationChannel(CHANNEL, "État de la connexion", NotificationManager.IMPORTANCE_LOW),
+                NotificationChannel(CHANNEL, getString(R.string.notif_channel), NotificationManager.IMPORTANCE_LOW),
             )
         }
     }
