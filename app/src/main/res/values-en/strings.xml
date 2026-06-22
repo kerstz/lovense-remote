@@ -35,6 +35,7 @@
     <string name="share_stop">Stop sharing</string>
     <string name="share_internet_connected">Internet — relay connected ✓</string>
     <string name="share_internet_connecting">Internet — connecting to relay…</string>
+    <string name="share_internet_preparing">Preparing internet link… (a few seconds)</string>
     <string name="share_internet_hint">Open this link from ANYWHERE (mobile data/other network):</string>
     <string name="share_lan_title">Same WiFi (LAN)</string>
     <string name="share_lan_hint">More responsive on the same WiFi:</string>

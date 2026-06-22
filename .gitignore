@@ -20,5 +20,8 @@ apk_extract/
 *.log
 *.dec
 
+# Binaire cloudflared (~37 Mo) — téléchargé au build par downloadCloudflared
+app/src/main/jniLibs/**/libcloudflared.so
+
 # OS
 .DS_Store

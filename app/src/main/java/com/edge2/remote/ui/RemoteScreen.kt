@@ -75,7 +75,7 @@ fun RemoteScreen(vm: RemoteViewModel, onDisconnect: () -> Unit) {
     val levels by vm.actuatorLevels.collectAsStateWithLifecycle()
     val shareUrl by vm.shareUrl.collectAsStateWithLifecycle()
     val tunnelUrl by vm.tunnelUrl.collectAsStateWithLifecycle()
-    val tunnelConnected by vm.tunnelConnected.collectAsStateWithLifecycle()
+    val tunnelPreparing by vm.tunnelPreparing.collectAsStateWithLifecycle()
     val imported by vm.importedPatterns.collectAsStateWithLifecycle()
 
     val connected = state as? ConnectionState.Connected
@@ -145,7 +145,7 @@ fun RemoteScreen(vm: RemoteViewModel, onDisconnect: () -> Unit) {
     }
 
     if (shareOpen) {
-        ShareDialog(shareUrl, tunnelUrl, tunnelConnected) { vm.stopSharing(); shareOpen = false }
+        ShareDialog(shareUrl, tunnelUrl, tunnelPreparing) { vm.stopSharing(); shareOpen = false }
     }
     if (importOpen) {
         ImportDialog(
@@ -398,20 +398,28 @@ private fun BatteryGlyph(level: Int?) {
 // --- Dialogs (Phase 4B + import) — héritent du thème Edge2 -----------------
 
 @Composable
-private fun ShareDialog(lanUrl: String?, tunnelUrl: String?, tunnelConnected: Boolean, onDismiss: () -> Unit) {
+private fun ShareDialog(lanUrl: String?, tunnelUrl: String?, tunnelPreparing: Boolean, onDismiss: () -> Unit) {
+    val c = Edge2.colors
     AlertDialog(
         onDismissRequest = onDismiss,
         confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.share_stop)) } },
         title = { Text(stringResource(R.string.share_title)) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                if (tunnelUrl != null) {
-                    val title = if (tunnelConnected) stringResource(R.string.share_internet_connected) else stringResource(R.string.share_internet_connecting)
-                    ShareBlock(title, stringResource(R.string.share_internet_hint), tunnelUrl)
-                }
+                // Internet (cloudflared) — marche de partout, 4G inclus.
                 when {
-                    lanUrl != null -> ShareBlock(stringResource(R.string.share_lan_title), stringResource(R.string.share_lan_hint), lanUrl)
-                    tunnelUrl == null -> Text(stringResource(R.string.share_none))
+                    tunnelUrl != null -> ShareBlock(
+                        stringResource(R.string.share_internet_connected),
+                        stringResource(R.string.share_internet_hint), tunnelUrl,
+                    )
+                    tunnelPreparing -> Text(stringResource(R.string.share_internet_preparing), color = c.muted)
+                }
+                // LAN (Wi-Fi/Ethernet) — plus réactif sur le même réseau.
+                if (lanUrl != null) {
+                    ShareBlock(stringResource(R.string.share_lan_title), stringResource(R.string.share_lan_hint), lanUrl)
+                }
+                if (lanUrl == null && tunnelUrl == null && !tunnelPreparing) {
+                    Text(stringResource(R.string.share_none))
                 }
                 Text(stringResource(R.string.share_warn), style = MaterialTheme.typography.bodySmall)
             }

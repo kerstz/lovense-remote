@@ -35,6 +35,7 @@
     <string name="share_stop">Dejar de compartir</string>
     <string name="share_internet_connected">Internet — relé conectado ✓</string>
     <string name="share_internet_connecting">Internet — conectando al relé…</string>
+    <string name="share_internet_preparing">Preparando enlace de internet… (unos segundos)</string>
     <string name="share_internet_hint">Abre este enlace desde CUALQUIER LUGAR (datos/otra red):</string>
     <string name="share_lan_title">Misma WiFi (LAN)</string>
     <string name="share_lan_hint">Más reactivo en la misma WiFi:</string>
