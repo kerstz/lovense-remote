@@ -30,6 +30,7 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
     val sharing = engine.sharing
     val pin = engine.pin
     val approved = engine.approved
+    val chat = engine.chat
     val importedPatterns = engine.importedPatterns
 
     // Actions
@@ -50,6 +51,7 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
     fun stopSharing() = engine.stopSharing()
     fun approveControl() = engine.approveControl()
     fun refuseControl() = engine.refuseControl()
+    fun sendChat(text: String) = engine.sendChat(text)
     fun importFromUrl(url: String) = engine.importFromUrl(url)
     fun importFromText(content: String) = engine.importFromText(content)
 
