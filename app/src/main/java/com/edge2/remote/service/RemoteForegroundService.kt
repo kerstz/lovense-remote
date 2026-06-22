@@ -34,7 +34,10 @@ class RemoteForegroundService : Service() {
             return START_NOT_STICKY
         }
         goForeground(intent?.getStringExtra(EXTRA_NAME) ?: "Lovense")
-        return START_STICKY
+        // NOT_STICKY : si le process meurt, la connexion BLE est perdue de toute
+        // façon → inutile de relancer le service à vide. Tant que le process vit
+        // (maintenu par ce service), il survit au balayage de l'app.
+        return START_NOT_STICKY
     }
 
     private fun goForeground(name: String) {
