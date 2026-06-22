@@ -44,8 +44,31 @@ android {
                 "META-INF/{AL2.0,LGPL2.1}",
             )
         }
+        // Extrait les .so sur disque à l'install → cloudflared (libcloudflared.so)
+        // devient exécutable depuis nativeLibraryDir (tunnel internet, 4G).
+        jniLibs { useLegacyPackaging = true }
     }
 }
+
+// Télécharge le binaire cloudflared (tunnel quick) dans jniLibs si absent.
+// Non versionné (≈37 Mo) ; récupéré au build. ABI → arch cloudflared.
+// arm64 seulement (couvre tous les appareils récents) ; 32-bit → pas de tunnel
+// internet (dégradé proprement : cloudflared.available = false).
+val cloudflaredAbis = mapOf("arm64-v8a" to "arm64")
+tasks.register("downloadCloudflared") {
+    doLast {
+        cloudflaredAbis.forEach { (abi, arch) ->
+            val out = file("src/main/jniLibs/$abi/libcloudflared.so")
+            if (!out.exists()) {
+                out.parentFile.mkdirs()
+                logger.lifecycle("Téléchargement cloudflared-$arch…")
+                uri("https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-$arch")
+                    .toURL().openStream().use { input -> out.outputStream().use { input.copyTo(it) } }
+            }
+        }
+    }
+}
+tasks.named("preBuild") { dependsOn("downloadCloudflared") }
 
 dependencies {
     implementation(libs.androidx.core.ktx)

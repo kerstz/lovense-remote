@@ -23,6 +23,7 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
     val shareUrl = engine.shareUrl
     val tunnelUrl = engine.tunnelUrl
     val tunnelConnected = engine.tunnelConnected
+    val tunnelPreparing = engine.tunnelPreparing
     val importedPatterns = engine.importedPatterns
 
     // Actions

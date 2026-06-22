@@ -7,11 +7,10 @@ import com.edge2.remote.ble.Edge2BleManager
 import com.edge2.remote.pattern.LovenseImporter
 import com.edge2.remote.pattern.Pattern
 import com.edge2.remote.pattern.PatternPlayer
+import com.edge2.remote.remote.CloudflaredTunnel
 import com.edge2.remote.remote.NetworkUtils
-import com.edge2.remote.remote.RelayConfig
 import com.edge2.remote.remote.RemoteCommand
 import com.edge2.remote.remote.RemoteServer
-import com.edge2.remote.remote.RemoteTunnel
 import com.edge2.remote.service.AppActions
 import com.edge2.remote.service.RemoteForegroundService
 import kotlinx.coroutines.CoroutineScope
@@ -41,23 +40,34 @@ class RemoteEngine private constructor(context: Context) {
     private val player = PatternPlayer(ble, scope)
     private val importer = LovenseImporter()
     private val server = RemoteServer(appContext.assets) { cmd -> applyRemote(cmd) }
-    private val tunnel = RemoteTunnel(scope) { cmd -> applyRemote(cmd) }
+    private val cloudflared = CloudflaredTunnel(appContext, scope)
 
     // --- État exposé -----------------------------------------------------
     val connectionState = ble.connectionState
     val actuatorLevels = ble.actuatorLevels
     val discovered = ble.discovered
     val playing: StateFlow<String?> = player.playing
-    val tunnelConnected: StateFlow<Boolean> = tunnel.connected
 
     private val _linkMode = MutableStateFlow(false)
     val linkMode: StateFlow<Boolean> = _linkMode.asStateFlow()
 
+    /** Partage actif (serveur embarqué démarré) — pilote le service premier-plan. */
+    private val _sharing = MutableStateFlow(false)
+
     private val _shareUrl = MutableStateFlow<String?>(null)
     val shareUrl: StateFlow<String?> = _shareUrl.asStateFlow()
 
+    /** URL internet (trycloudflare) prête, ou null. */
     private val _tunnelUrl = MutableStateFlow<String?>(null)
     val tunnelUrl: StateFlow<String?> = _tunnelUrl.asStateFlow()
+
+    /** true = lien internet prêt ; false pendant la préparation cloudflared. */
+    private val _tunnelConnected = MutableStateFlow(false)
+    val tunnelConnected: StateFlow<Boolean> = _tunnelConnected.asStateFlow()
+
+    /** true tant que le tunnel internet se prépare (binaire dispo, URL pas encore). */
+    private val _tunnelPreparing = MutableStateFlow(false)
+    val tunnelPreparing: StateFlow<Boolean> = _tunnelPreparing.asStateFlow()
 
     private val _importedPatterns = MutableStateFlow<List<Pattern>>(emptyList())
     val importedPatterns: StateFlow<List<Pattern>> = _importedPatterns.asStateFlow()
@@ -66,14 +76,27 @@ class RemoteEngine private constructor(context: Context) {
         // Bouton « Couper » de la notification.
         AppActions.onStop = { stopSharing(); disconnect() }
         // Service premier-plan actif tant qu'on est connecté OU en partage :
-        // garde le processus (donc le BLE + le serveur) vivant en arrière-plan
+        // garde le processus (BLE + serveur + tunnel) vivant en arrière-plan
         // et même après fermeture de l'app.
         scope.launch {
-            combine(connectionState, _shareUrl, _tunnelUrl) { st, lan, tun ->
-                st is ConnectionState.Connected || lan != null || tun != null
+            combine(connectionState, _sharing) { st, sharing ->
+                st is ConnectionState.Connected || sharing
             }.collect { active ->
                 if (active) RemoteForegroundService.start(appContext, currentName())
                 else RemoteForegroundService.stop(appContext)
+            }
+        }
+        // Quand cloudflared publie l'URL publique → lien internet prêt.
+        scope.launch {
+            cloudflared.publicUrl.collect { url ->
+                if (url != null && _sharing.value) {
+                    _tunnelUrl.value = "$url/s/${server.sessionId}"
+                    _tunnelConnected.value = true
+                    _tunnelPreparing.value = false
+                } else {
+                    _tunnelUrl.value = null
+                    _tunnelConnected.value = false
+                }
             }
         }
     }
@@ -109,19 +132,25 @@ class RemoteEngine private constructor(context: Context) {
 
     fun startSharing() {
         server.start()
+        _sharing.value = true
+        // LAN (Wi-Fi/Ethernet seulement ; null en 4G).
         val ip = NetworkUtils.lanIpv4()
         _shareUrl.value = ip?.let { "http://$it:${server.port}/s/${server.sessionId}" }
-        if (RelayConfig.enabled) {
-            tunnel.start()
-            _tunnelUrl.value = tunnel.shareUrl
+        // Tunnel internet via cloudflared → marche en 4G. URL prête en quelques s.
+        if (cloudflared.available) {
+            _tunnelPreparing.value = true
+            cloudflared.start(server.port)
         }
     }
 
     fun stopSharing() {
+        cloudflared.stop()
         server.stop()
-        tunnel.stop()
+        _sharing.value = false
         _shareUrl.value = null
         _tunnelUrl.value = null
+        _tunnelConnected.value = false
+        _tunnelPreparing.value = false
     }
 
     fun importFromUrl(url: String) {

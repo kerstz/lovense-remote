@@ -37,6 +37,7 @@
     <string name="share_stop">Arrêter le partage</string>
     <string name="share_internet_connected">Internet — relais connecté ✓</string>
     <string name="share_internet_connecting">Internet — connexion au relais…</string>
+    <string name="share_internet_preparing">Lien internet en préparation… (quelques secondes)</string>
     <string name="share_internet_hint">Ouvre ce lien de N\'IMPORTE OÙ (4G/autre réseau) :</string>
     <string name="share_lan_title">Même WiFi (LAN)</string>
     <string name="share_lan_hint">Plus réactif sur le même WiFi :</string>
