@@ -20,7 +20,7 @@ android {
 
     // Signature release : clé fournie par l'environnement (CI). Absente (build
     // F-Droid) → signingConfig nul, F-Droid signe avec sa propre clé.
-    val ksPath: String? = System.getenv("SIGNING_KEYSTORE_FILE")
+    val ksPath: String? = System.getenv("SIGNING_KEYSTORE_FILE")?.takeIf { it.isNotBlank() }
     val ksPresent = ksPath != null && file(ksPath).exists()
     signingConfigs {
         create("release") {

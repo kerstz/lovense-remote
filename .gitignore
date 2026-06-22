@@ -25,3 +25,7 @@ apk_extract/
 
 # Playwright MCP artefacts
 .playwright-mcp/
+
+# Signing keystores (NE JAMAIS commiter)
+*.jks
+*.keystore
