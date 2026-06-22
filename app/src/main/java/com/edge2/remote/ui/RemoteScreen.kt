@@ -77,7 +77,7 @@ import kotlin.math.sin
  * un slider étiqueté par actionneur (vibration / rotation / succion).
  */
 @Composable
-fun RemoteScreen(vm: RemoteViewModel, onDisconnect: () -> Unit) {
+fun RemoteScreen(vm: RemoteViewModel, onDisconnect: () -> Unit, onSettings: () -> Unit = {}) {
     val c = Edge2.colors
     val state by vm.connectionState.collectAsStateWithLifecycle()
     val playing by vm.playing.collectAsStateWithLifecycle()
@@ -127,6 +127,7 @@ fun RemoteScreen(vm: RemoteViewModel, onDisconnect: () -> Unit) {
                 }
                 Spacer(Modifier.size(6.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    GhostChip("⚙") { onSettings() }
                     GhostChip(stringResource(R.string.action_share)) { vm.startSharing(); shareOpen = true }
                     GhostChip(stringResource(R.string.action_disconnect)) { onDisconnect() }
                 }

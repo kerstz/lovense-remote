@@ -104,6 +104,7 @@ fun ConnectionScreen(
     discovered: List<DiscoveredToy>,
     onScan: () -> Unit,
     onSelect: (DiscoveredToy) -> Unit,
+    onSettings: () -> Unit = {},
 ) {
     val c = Edge2.colors
     val connecting = state is ConnectionState.Connecting
@@ -119,9 +120,12 @@ fun ConnectionScreen(
             .padding(horizontal = 26.dp, vertical = 18.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(11.dp)) {
-            BrandMark(size = 30.dp)
-            Text(stringResource(R.string.conn_eyebrow), color = c.muted, fontWeight = FontWeight.Bold, fontSize = 12.sp, letterSpacing = 3.sp)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(11.dp)) {
+                BrandMark(size = 30.dp)
+                Text(stringResource(R.string.conn_eyebrow), color = c.muted, fontWeight = FontWeight.Bold, fontSize = 12.sp, letterSpacing = 3.sp)
+            }
+            Text("⚙", color = c.muted, fontSize = 20.sp, modifier = Modifier.clickable { onSettings() }.padding(6.dp))
         }
 
         Spacer(Modifier.size(4.dp))
