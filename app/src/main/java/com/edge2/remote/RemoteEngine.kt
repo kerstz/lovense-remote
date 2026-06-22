@@ -7,6 +7,8 @@ import com.edge2.remote.ble.Edge2BleManager
 import com.edge2.remote.pattern.LovenseImporter
 import com.edge2.remote.pattern.Pattern
 import com.edge2.remote.pattern.PatternPlayer
+import com.edge2.remote.pattern.PatternStep
+import kotlin.math.roundToInt
 import com.edge2.remote.remote.NetworkUtils
 import com.edge2.remote.remote.RemoteCommand
 import com.edge2.remote.remote.RemoteServer
@@ -90,6 +92,14 @@ class RemoteEngine private constructor(context: Context) {
     private val _importedPatterns = MutableStateFlow<List<Pattern>>(emptyList())
     val importedPatterns: StateFlow<List<Pattern>> = _importedPatterns.asStateFlow()
 
+    // --- Enregistrement de pattern (perform → save) ----------------------
+    private val _recording = MutableStateFlow(false)
+    val recording: StateFlow<Boolean> = _recording.asStateFlow()
+    private var recStart = 0L
+    private val recBuf = mutableListOf<Triple<Long, Int, Int>>()
+    private var lastBase = 0
+    private var lastTige = 0
+
     init {
         // Bouton « Couper » de la notification.
         AppActions.onStop = { stopSharing(); disconnect() }
@@ -130,22 +140,55 @@ class RemoteEngine private constructor(context: Context) {
     fun toggleLink() { _linkMode.value = !_linkMode.value }
     fun reverse(index: Int) = ble.reverse(index)
     fun playPattern(pattern: Pattern) = player.play(pattern)
+    fun playTease() = player.playTease()
     fun stopAll() = player.stop()
 
     fun setActuator(index: Int, fraction: Float) {
         player.cancel()
         ble.setActuatorFraction(index, fraction)
+        val lvl = (fraction.coerceIn(0f, 1f) * 20).roundToInt()
+        if (index == 0) capture(base = lvl) else if (index == 1) capture(tige = lvl)
     }
 
     fun setBoth(fraction: Float) {
         player.cancel()
         ble.setAllFraction(fraction)
+        val lvl = (fraction.coerceIn(0f, 1f) * 20).roundToInt()
+        capture(base = lvl, tige = lvl)
     }
 
     fun setXY(base: Float, tige: Float) {
         player.cancel()
         ble.setActuatorFraction(0, base)
         ble.setActuatorFraction(1, tige)
+        capture((base.coerceIn(0f, 1f) * 20).roundToInt(), (tige.coerceIn(0f, 1f) * 20).roundToInt())
+    }
+
+    /** Démarre l'enregistrement : tes gestes deviennent un pattern. */
+    fun startRecording() {
+        recBuf.clear()
+        recStart = System.currentTimeMillis()
+        _recording.value = true
+        capture()
+    }
+
+    /** Arrête l'enregistrement et sauve le pattern (≥ 2 points). */
+    fun stopRecording() {
+        _recording.value = false
+        if (recBuf.size < 2) return
+        val steps = recBuf.zipWithNext { a, b ->
+            PatternStep(m1 = a.second, m2 = a.third, durationMs = (b.first - a.first).coerceIn(50, 5000))
+        }
+        if (steps.isEmpty()) return
+        val n = _importedPatterns.value.count { it.name.startsWith("Perso") } + 1
+        _importedPatterns.update { it + Pattern(name = "Perso $n", steps = steps, loop = true) }
+        recBuf.clear()
+    }
+
+    private fun capture(base: Int? = null, tige: Int? = null) {
+        if (base != null) lastBase = base
+        if (tige != null) lastTige = tige
+        if (_recording.value) recBuf.add(Triple(System.currentTimeMillis() - recStart, lastBase, lastTige))
     }
 
     fun startSharing() {

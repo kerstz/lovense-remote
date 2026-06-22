@@ -62,6 +62,7 @@ import com.edge2.remote.ble.ToyRegistry
 import com.edge2.remote.ble.ToyType
 import com.edge2.remote.pattern.BuiltinPatterns
 import com.edge2.remote.pattern.Pattern
+import com.edge2.remote.pattern.PatternPlayer
 import com.edge2.remote.remote.NetworkUtils
 import com.edge2.remote.ui.theme.Edge2
 import com.edge2.remote.ui.theme.JetBrainsMono
@@ -78,6 +79,7 @@ fun RemoteScreen(vm: RemoteViewModel, onDisconnect: () -> Unit) {
     val c = Edge2.colors
     val state by vm.connectionState.collectAsStateWithLifecycle()
     val playing by vm.playing.collectAsStateWithLifecycle()
+    val recording by vm.recording.collectAsStateWithLifecycle()
     val controllers by vm.controllers.collectAsStateWithLifecycle()
     val sharing by vm.sharing.collectAsStateWithLifecycle()
     val pin by vm.pin.collectAsStateWithLifecycle()
@@ -173,6 +175,17 @@ fun RemoteScreen(vm: RemoteViewModel, onDisconnect: () -> Unit) {
                 }
             }
             PatternChip("+ Lovense", -1, false, Modifier.weight(1f)) { importOpen = true }
+        }
+        // Tease (aléatoire) + Enregistrer (perform → pattern perso).
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            PatternChip(stringResource(R.string.pattern_tease), 0, playing == PatternPlayer.TEASE, Modifier.weight(1f)) {
+                if (playing == PatternPlayer.TEASE) vm.stopAll() else vm.playTease()
+            }
+            val recLabel = if (recording) stringResource(R.string.pattern_recording) else stringResource(R.string.pattern_record)
+            PatternChip(recLabel, 2, recording, Modifier.weight(1f)) {
+                if (recording) vm.stopRecording() else vm.startRecording()
+            }
+            Spacer(Modifier.weight(1f))
         }
 
         // --- STOP géant pendant un partage (toujours accessible côté host) -

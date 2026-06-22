@@ -32,6 +32,9 @@
     <string name="controlled_count">%1$d connected · relayed over BLE</string>
     <string name="patterns_header">PRESETS</string>
     <string name="playing_stop">PLAYING · STOP</string>
+    <string name="pattern_tease">Tease</string>
+    <string name="pattern_record">Record</string>
+    <string name="pattern_recording">● REC</string>
     <string name="actuator_reverse">⟲ dir</string>
     <string name="kind_vibrate">Vibration</string>
     <string name="kind_rotate">Rotation</string>

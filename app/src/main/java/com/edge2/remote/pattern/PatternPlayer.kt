@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlin.random.Random
 
 /**
  * Joue un [Pattern] en envoyant les intensités au toy via [Edge2BleManager],
@@ -43,6 +44,32 @@ class PatternPlayer(
         }
     }
 
+    /**
+     * Mode Tease : intensités aléatoires avec pauses surprises et montées
+     * progressives — jamais deux fois pareil. Tourne jusqu'à [stop].
+     */
+    fun playTease() {
+        cancelJob()
+        _playing.value = TEASE
+        job = scope.launch {
+            var ceiling = 8 // plafond qui monte au fil du temps
+            while (isActive) {
+                if (Random.nextInt(6) == 0) {
+                    // Pause taquine.
+                    ble.setActuator(0, 0); ble.setActuator(1, 0)
+                    delay(Random.nextLong(400, 1400))
+                } else {
+                    val a = Random.nextInt(4, ceiling.coerceAtMost(20) + 1)
+                    val b = if (Random.nextBoolean()) a else Random.nextInt(4, ceiling.coerceAtMost(20) + 1)
+                    ble.setActuator(0, a); ble.setActuator(1, b)
+                    delay(Random.nextLong(250, 1100))
+                }
+                if (ceiling < 20) ceiling++
+            }
+            ble.stopAll()
+        }
+    }
+
     /** Stoppe la lecture ET coupe les moteurs. */
     fun stop() {
         cancelJob()
@@ -58,5 +85,10 @@ class PatternPlayer(
         job?.cancel()
         job = null
         _playing.value = null
+    }
+
+    companion object {
+        /** Nom interne du mode Tease (procédural, pas un [Pattern]). */
+        const val TEASE = "Tease"
     }
 }

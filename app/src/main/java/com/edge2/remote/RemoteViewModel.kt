@@ -19,6 +19,7 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
     val actuatorLevels = engine.actuatorLevels
     val discovered = engine.discovered
     val playing = engine.playing
+    val recording = engine.recording
     val controllers = engine.controllers
     val linkMode = engine.linkMode
     val shareUrl = engine.shareUrl
@@ -41,6 +42,9 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
     fun setBoth(fraction: Float) = engine.setBoth(fraction)
     fun setXY(base: Float, tige: Float) = engine.setXY(base, tige)
     fun playPattern(pattern: Pattern) = engine.playPattern(pattern)
+    fun playTease() = engine.playTease()
+    fun startRecording() = engine.startRecording()
+    fun stopRecording() = engine.stopRecording()
     fun stopAll() = engine.stopAll()
     fun startSharing() = engine.startSharing()
     fun stopSharing() = engine.stopSharing()

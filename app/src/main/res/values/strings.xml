@@ -34,6 +34,9 @@
     <string name="controlled_count">%1$d connecté(s) · BLE relayé</string>
     <string name="patterns_header">PRÉ-ENREGISTRÉ</string>
     <string name="playing_stop">EN LECTURE · STOP</string>
+    <string name="pattern_tease">Tease</string>
+    <string name="pattern_record">Enregistrer</string>
+    <string name="pattern_recording">● REC</string>
     <string name="actuator_reverse">⟲ sens</string>
     <string name="kind_vibrate">Vibration</string>
     <string name="kind_rotate">Rotation</string>
