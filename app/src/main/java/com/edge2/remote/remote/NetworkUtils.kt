@@ -9,16 +9,27 @@ import java.net.NetworkInterface
 
 object NetworkUtils {
 
-    /** Première IPv4 locale (site-local) non-loopback, ou null si absente. */
+    /**
+     * IPv4 locale d'une interface **Wi-Fi / Ethernet** (jamais cellulaire), ou
+     * null. On exclut le cellulaire (`rmnet…`) : son IP `10.x` est site-local
+     * mais derrière le NAT opérateur → un lien LAN dessus est injoignable. Le
+     * partage LAN n'a de sens que sur Wi-Fi / Ethernet / partage de connexion.
+     */
     fun lanIpv4(): String? {
         return runCatching {
             NetworkInterface.getNetworkInterfaces().toList()
-                .filter { it.isUp && !it.isLoopback }
+                .filter { it.isUp && !it.isLoopback && isLanInterface(it.name) }
                 .flatMap { it.inetAddresses.toList() }
                 .filterIsInstance<Inet4Address>()
                 .firstOrNull { it.isSiteLocalAddress }
                 ?.hostAddress
         }.getOrNull()
+    }
+
+    /** Wi-Fi / Ethernet / hotspot — exclut le cellulaire (rmnet, ccmni, pdp…). */
+    private fun isLanInterface(name: String): Boolean {
+        val n = name.lowercase()
+        return n.startsWith("wlan") || n.startsWith("eth") || n.startsWith("ap") || n.startsWith("swlan")
     }
 
     /** Génère un QR code (bitmap noir/blanc) pour [content]. */
