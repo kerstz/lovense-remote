@@ -19,11 +19,13 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
     val actuatorLevels = engine.actuatorLevels
     val discovered = engine.discovered
     val playing = engine.playing
+    val controllers = engine.controllers
     val linkMode = engine.linkMode
     val shareUrl = engine.shareUrl
     val tunnelUrl = engine.tunnelUrl
     val tunnelConnected = engine.tunnelConnected
     val tunnelPreparing = engine.tunnelPreparing
+    val shareError = engine.shareError
     val importedPatterns = engine.importedPatterns
 
     // Actions

@@ -14,6 +14,10 @@ import io.ktor.server.websocket.webSocket
 import io.ktor.websocket.Frame
 import io.ktor.websocket.close
 import io.ktor.websocket.readText
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlin.random.Random
 
 /**
@@ -37,6 +41,10 @@ class RemoteServer(
 
     val port: Int = 8787
 
+    /** Nombre de contrôleurs actuellement connectés (pour l'écran « On contrôle »). */
+    private val _controllers = MutableStateFlow(0)
+    val controllers: StateFlow<Int> = _controllers.asStateFlow()
+
     private var engine: io.ktor.server.engine.ApplicationEngine? = null
 
     private val html: String by lazy {
@@ -45,8 +53,14 @@ class RemoteServer(
             .replace("__WS_PATH__", "/ws")
     }
 
-    fun start() {
-        if (engine != null) return
+    /**
+     * Démarre le serveur. Renvoie false si l'app ne peut pas créer de socket
+     * (réseau bloqué par un pare-feu / autorisation réseau coupée) : dans ce cas
+     * on n'amorce PAS Ktor, dont l'erreur de bind (asynchrone) crasherait l'app.
+     */
+    fun start(): Boolean {
+        if (engine != null) return true
+        if (!canBindSocket()) return false
         sessionId = randomId()
         engine = embeddedServer(CIO, port = port, host = "0.0.0.0") {
             install(WebSockets)
@@ -59,20 +73,32 @@ class RemoteServer(
                         close()
                         return@webSocket
                     }
-                    for (frame in incoming) {
-                        if (frame is Frame.Text) {
-                            RemoteCommand.parse(frame.readText())?.let(onCommand)
+                    _controllers.update { it + 1 }
+                    try {
+                        for (frame in incoming) {
+                            if (frame is Frame.Text) {
+                                RemoteCommand.parse(frame.readText())?.let(onCommand)
+                            }
                         }
+                    } finally {
+                        _controllers.update { it - 1 }
                     }
                 }
             }
         }.also { it.start(wait = false) }
+        return true
     }
+
+    /** Teste si l'app peut créer/binder un socket serveur (réseau autorisé ?). */
+    private fun canBindSocket(): Boolean = runCatching {
+        java.net.ServerSocket().use { it.bind(java.net.InetSocketAddress(0)) }
+    }.isSuccess
 
     fun stop() {
         engine?.stop(gracePeriodMillis = 200, timeoutMillis = 800)
         engine = null
         sessionId = ""
+        _controllers.value = 0
     }
 
     val isRunning: Boolean get() = engine != null

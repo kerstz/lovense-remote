@@ -23,6 +23,8 @@
     <string name="preset_soft">Suave</string>
     <string name="preset_medium">Medio</string>
     <string name="preset_strong">Fuerte</string>
+    <string name="controlled_title">Te están controlando</string>
+    <string name="controlled_count">%1$d conectado(s) · vía BLE</string>
     <string name="patterns_header">PREAJUSTES</string>
     <string name="playing_stop">REPRODUCIENDO · STOP</string>
     <string name="actuator_reverse">⟲ sentido</string>
@@ -42,6 +44,11 @@
     <string name="share_none">No se detecta WiFi y el túnel no está configurado. Conecta a una WiFi o ajusta RelayConfig.BASE_URL.</string>
     <string name="share_warn">Mientras este enlace esté abierto, quien lo tenga controla el juguete.</string>
     <string name="qr_desc">Código QR del enlace de control</string>
+    <string name="action_copy">Copiar</string>
+    <string name="action_send">Enviar</string>
+    <string name="link_copied">Enlace copiado</string>
+    <string name="share_blocked">No se pudo compartir: la red está bloqueada para la app (revisa el permiso de red / cortafuegos).</string>
+    <string name="share_via">Compartir enlace</string>
 
     <!-- Importar patrón -->
     <string name="import_title">Importar un patrón Lovense</string>

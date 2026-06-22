@@ -1,5 +1,7 @@
 package com.edge2.remote.ui
 
+import android.content.Intent
+import android.widget.Toast
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -28,6 +30,7 @@ import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateListOf
@@ -43,7 +46,10 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -72,10 +78,12 @@ fun RemoteScreen(vm: RemoteViewModel, onDisconnect: () -> Unit) {
     val c = Edge2.colors
     val state by vm.connectionState.collectAsStateWithLifecycle()
     val playing by vm.playing.collectAsStateWithLifecycle()
+    val controllers by vm.controllers.collectAsStateWithLifecycle()
     val levels by vm.actuatorLevels.collectAsStateWithLifecycle()
     val shareUrl by vm.shareUrl.collectAsStateWithLifecycle()
     val tunnelUrl by vm.tunnelUrl.collectAsStateWithLifecycle()
     val tunnelPreparing by vm.tunnelPreparing.collectAsStateWithLifecycle()
+    val shareError by vm.shareError.collectAsStateWithLifecycle()
     val imported by vm.importedPatterns.collectAsStateWithLifecycle()
 
     val connected = state as? ConnectionState.Connected
@@ -83,6 +91,9 @@ fun RemoteScreen(vm: RemoteViewModel, onDisconnect: () -> Unit) {
     val battery = connected?.battery
     var shareOpen by remember { mutableStateOf(false) }
     var importOpen by remember { mutableStateOf(false) }
+
+    // Dès qu'un contrôleur distant se connecte → on ferme la popup de partage.
+    LaunchedEffect(controllers) { if (controllers > 0) shareOpen = false }
 
     Column(
         modifier = Modifier
@@ -109,6 +120,24 @@ fun RemoteScreen(vm: RemoteViewModel, onDisconnect: () -> Unit) {
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     GhostChip(stringResource(R.string.action_share)) { vm.startSharing(); shareOpen = true }
                     GhostChip(stringResource(R.string.action_disconnect)) { onDisconnect() }
+                }
+            }
+        }
+
+        // --- « On contrôle » : un·e partenaire pilote à distance -----------
+        if (controllers > 0) {
+            Row(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(15.dp))
+                    .background(c.live.copy(alpha = .12f))
+                    .border(1.dp, c.live.copy(alpha = .35f), RoundedCornerShape(15.dp))
+                    .padding(14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(11.dp),
+            ) {
+                Box(Modifier.size(10.dp).clip(CircleShape).background(c.live))
+                Column(Modifier.weight(1f)) {
+                    Text(stringResource(R.string.controlled_title), color = c.ink, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                    Text(stringResource(R.string.controlled_count, controllers), color = c.live, fontSize = 11.sp)
                 }
             }
         }
@@ -145,7 +174,7 @@ fun RemoteScreen(vm: RemoteViewModel, onDisconnect: () -> Unit) {
     }
 
     if (shareOpen) {
-        ShareDialog(shareUrl, tunnelUrl, tunnelPreparing) { vm.stopSharing(); shareOpen = false }
+        ShareDialog(shareUrl, tunnelUrl, tunnelPreparing, shareError) { vm.stopSharing(); shareOpen = false }
     }
     if (importOpen) {
         ImportDialog(
@@ -398,7 +427,7 @@ private fun BatteryGlyph(level: Int?) {
 // --- Dialogs (Phase 4B + import) — héritent du thème Edge2 -----------------
 
 @Composable
-private fun ShareDialog(lanUrl: String?, tunnelUrl: String?, tunnelPreparing: Boolean, onDismiss: () -> Unit) {
+private fun ShareDialog(lanUrl: String?, tunnelUrl: String?, tunnelPreparing: Boolean, shareError: Boolean, onDismiss: () -> Unit) {
     val c = Edge2.colors
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -406,22 +435,26 @@ private fun ShareDialog(lanUrl: String?, tunnelUrl: String?, tunnelPreparing: Bo
         title = { Text(stringResource(R.string.share_title)) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                // Internet (cloudflared) — marche de partout, 4G inclus.
-                when {
-                    tunnelUrl != null -> ShareBlock(
-                        stringResource(R.string.share_internet_connected),
-                        stringResource(R.string.share_internet_hint), tunnelUrl,
-                    )
-                    tunnelPreparing -> Text(stringResource(R.string.share_internet_preparing), color = c.muted)
+                if (shareError) {
+                    Text(stringResource(R.string.share_blocked), color = c.danger)
+                } else {
+                    // Internet (SSH/localhost.run) — marche de partout, 4G inclus.
+                    when {
+                        tunnelUrl != null -> ShareBlock(
+                            stringResource(R.string.share_internet_connected),
+                            stringResource(R.string.share_internet_hint), tunnelUrl,
+                        )
+                        tunnelPreparing -> Text(stringResource(R.string.share_internet_preparing), color = c.muted)
+                    }
+                    // LAN (Wi-Fi/Ethernet) — plus réactif sur le même réseau.
+                    if (lanUrl != null) {
+                        ShareBlock(stringResource(R.string.share_lan_title), stringResource(R.string.share_lan_hint), lanUrl)
+                    }
+                    if (lanUrl == null && tunnelUrl == null && !tunnelPreparing) {
+                        Text(stringResource(R.string.share_none))
+                    }
+                    Text(stringResource(R.string.share_warn), style = MaterialTheme.typography.bodySmall)
                 }
-                // LAN (Wi-Fi/Ethernet) — plus réactif sur le même réseau.
-                if (lanUrl != null) {
-                    ShareBlock(stringResource(R.string.share_lan_title), stringResource(R.string.share_lan_hint), lanUrl)
-                }
-                if (lanUrl == null && tunnelUrl == null && !tunnelPreparing) {
-                    Text(stringResource(R.string.share_none))
-                }
-                Text(stringResource(R.string.share_warn), style = MaterialTheme.typography.bodySmall)
             }
         },
     )
@@ -429,10 +462,26 @@ private fun ShareDialog(lanUrl: String?, tunnelUrl: String?, tunnelPreparing: Bo
 
 @Composable
 private fun ShareBlock(title: String, hint: String, url: String) {
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    val context = LocalContext.current
+    val clipboard = LocalClipboardManager.current
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
         Text(hint, style = MaterialTheme.typography.bodySmall)
         Text(url, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+        // Lien partageable : copier ou envoyer via le système (SMS, messagerie…).
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            GhostChip(stringResource(R.string.action_copy)) {
+                clipboard.setText(AnnotatedString(url))
+                Toast.makeText(context, context.getString(R.string.link_copied), Toast.LENGTH_SHORT).show()
+            }
+            GhostChip(stringResource(R.string.action_send)) {
+                val send = Intent(Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(Intent.EXTRA_TEXT, url)
+                }
+                context.startActivity(Intent.createChooser(send, context.getString(R.string.share_via)))
+            }
+        }
         val qr = remember(url) { NetworkUtils.qrBitmap(url, 480).asImageBitmap() }
         Image(bitmap = qr, contentDescription = stringResource(R.string.qr_desc), modifier = Modifier.size(200.dp))
     }
