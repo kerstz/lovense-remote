@@ -7,6 +7,9 @@ import com.edge2.remote.ble.Edge2BleManager
 import com.edge2.remote.ble.Motor
 import com.edge2.remote.pattern.Pattern
 import com.edge2.remote.pattern.PatternPlayer
+import com.edge2.remote.remote.NetworkUtils
+import com.edge2.remote.remote.RemoteCommand
+import com.edge2.remote.remote.RemoteServer
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -27,6 +30,44 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
     /** Mode Link : un seul geste pilote les deux moteurs ensemble. */
     private val _linkMode = MutableStateFlow(false)
     val linkMode: StateFlow<Boolean> = _linkMode.asStateFlow()
+
+    // --- Partage à distance (host) ---------------------------------------
+
+    private val server = RemoteServer(app.assets) { cmd -> applyRemote(cmd) }
+
+    /** URL de partage `http://<ip-lan>:<port>/s/<id>`, ou null si pas de partage. */
+    private val _shareUrl = MutableStateFlow<String?>(null)
+    val shareUrl: StateFlow<String?> = _shareUrl.asStateFlow()
+
+    fun startSharing() {
+        server.start()
+        val ip = NetworkUtils.lanIpv4()
+        _shareUrl.value = if (ip != null) {
+            "http://$ip:${server.port}/s/${server.sessionId}"
+        } else {
+            null // pas de réseau local détecté
+        }
+    }
+
+    fun stopSharing() {
+        server.stop()
+        _shareUrl.value = null
+    }
+
+    /** Applique une commande reçue d'un contrôleur distant (web ou app). */
+    private fun applyRemote(cmd: RemoteCommand) {
+        player.cancel()
+        when (cmd) {
+            is RemoteCommand.SetMotor ->
+                Motor.entries.firstOrNull { it.index == cmd.index }
+                    ?.let { ble.setMotor(it, cmd.level) }
+            is RemoteCommand.SetBoth -> {
+                ble.setMotor(Motor.BASE, cmd.level)
+                ble.setMotor(Motor.SHAFT, cmd.level)
+            }
+            RemoteCommand.Stop -> ble.stopAll()
+        }
+    }
 
     fun connect() = ble.connect()
     fun disconnect() = ble.disconnect()
@@ -53,6 +94,7 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
 
     override fun onCleared() {
         super.onCleared()
+        server.stop()
         ble.release()
     }
 }

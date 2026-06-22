@@ -11,6 +11,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -18,15 +21,19 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.edge2.remote.remote.NetworkUtils
 import com.edge2.remote.RemoteViewModel
 import com.edge2.remote.ble.ConnectionState
 import com.edge2.remote.ble.Motor
@@ -44,8 +51,10 @@ fun RemoteScreen(vm: RemoteViewModel, onRequestConnect: () -> Unit) {
     val state by vm.connectionState.collectAsStateWithLifecycle()
     val link by vm.linkMode.collectAsStateWithLifecycle()
     val playing by vm.playing.collectAsStateWithLifecycle()
+    val shareUrl by vm.shareUrl.collectAsStateWithLifecycle()
 
     val connected = state is ConnectionState.Connected
+    var shareOpen by remember { mutableStateOf(false) }
 
     // État local des sliders (source de vérité du geste manuel).
     var baseF by remember { mutableFloatStateOf(0f) }
@@ -78,11 +87,21 @@ fun RemoteScreen(vm: RemoteViewModel, onRequestConnect: () -> Unit) {
                 Text("Edge2 Remote", style = MaterialTheme.typography.titleMedium)
                 Text(statusLabel(state), style = MaterialTheme.typography.bodyMedium)
             }
-            if (connected) {
-                OutlinedButton(onClick = { vm.disconnect() }) { Text("Couper") }
-            } else {
-                Button(onClick = onRequestConnect) { Text("Connecter") }
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                if (connected) {
+                    TextButton(onClick = { vm.startSharing(); shareOpen = true }) { Text("Partager") }
+                    OutlinedButton(onClick = { vm.disconnect() }) { Text("Couper") }
+                } else {
+                    Button(onClick = onRequestConnect) { Text("Connecter") }
+                }
             }
+        }
+
+        if (shareOpen) {
+            ShareDialog(
+                url = shareUrl,
+                onDismiss = { vm.stopSharing(); shareOpen = false },
+            )
         }
 
         // --- Presets d'intensité ----------------------------------------
@@ -167,6 +186,37 @@ fun RemoteScreen(vm: RemoteViewModel, onRequestConnect: () -> Unit) {
             Text("STOP", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
         }
     }
+}
+
+@Composable
+private fun ShareDialog(url: String?, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Arrêter le partage") } },
+        title = { Text("Contrôle à distance") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                if (url == null) {
+                    Text("Aucun réseau WiFi détecté. Connecte le téléphone à un WiFi pour partager en LAN (le tunnel internet arrive en 4B).")
+                } else {
+                    Text("Sur le MÊME WiFi, ouvre ce lien (ou scanne le QR) :")
+                    Text(url, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                    val qr = remember(url) { NetworkUtils.qrBitmap(url, 480).asImageBitmap() }
+                    Image(
+                        bitmap = qr,
+                        contentDescription = "QR du lien de contrôle",
+                        modifier = Modifier
+                            .width(220.dp)
+                            .height(220.dp),
+                    )
+                    Text(
+                        "Tant que ce partage est ouvert, qui a le lien pilote le toy.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            }
+        },
+    )
 }
 
 private fun statusLabel(state: ConnectionState): String = when (state) {

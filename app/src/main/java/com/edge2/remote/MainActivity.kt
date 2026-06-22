@@ -15,18 +15,38 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.edge2.remote.ui.ControllerScreen
 import com.edge2.remote.ui.RemoteScreen
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent { App() }
+        // Deep link contrôleur : edge2remote://control?ws=<url ws du host distant>
+        val data = intent?.data
+        val controllerWsUrl =
+            if (data?.scheme == "edge2remote") data.getQueryParameter("ws") else null
+
+        setContent {
+            val colors = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                dynamicDarkColorScheme(LocalContext.current)
+            } else {
+                MaterialTheme.colorScheme
+            }
+            MaterialTheme(colorScheme = colors) {
+                Surface(modifier = Modifier.fillMaxSize()) {
+                    if (controllerWsUrl != null) {
+                        ControllerScreen(wsUrl = controllerWsUrl)
+                    } else {
+                        App()
+                    }
+                }
+            }
+        }
     }
 }
 
 @Composable
 private fun App() {
-    val context = LocalContext.current
     val vm: RemoteViewModel = viewModel()
 
     // Demande des permissions BLE puis lance la connexion si accordées.
@@ -43,14 +63,5 @@ private fun App() {
         permissionLauncher.launch(perms)
     }
 
-    val colors = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-        dynamicDarkColorScheme(context)
-    } else {
-        MaterialTheme.colorScheme
-    }
-    MaterialTheme(colorScheme = colors) {
-        Surface(modifier = Modifier.fillMaxSize()) {
-            RemoteScreen(vm = vm, onRequestConnect = ::requestConnect)
-        }
-    }
+    RemoteScreen(vm = vm, onRequestConnect = ::requestConnect)
 }

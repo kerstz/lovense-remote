@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Edge2 Remote — Contrôle</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    margin: 0; font-family: system-ui, sans-serif; background: #111114; color: #eee;
+    height: 100dvh; display: flex; flex-direction: column; padding: 16px; gap: 12px;
+  }
+  header { display: flex; justify-content: space-between; align-items: center; }
+  h1 { font-size: 1.1rem; margin: 0; }
+  #status { font-size: .85rem; color: #9aa; }
+  .appbtn {
+    background: #2a2a33; color: #ddd; border: 1px solid #3a3a45; border-radius: 12px;
+    padding: 8px 12px; font-size: .85rem;
+  }
+  .sliders { flex: 1; display: flex; gap: 14px; min-height: 0; }
+  .col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .lab { font-size: .8rem; color: #aab; letter-spacing: .05em; }
+  input[type=range] {
+    writing-mode: vertical-lr; direction: rtl;       /* bas = 0, haut = max */
+    width: 64px; flex: 1; accent-color: #b066ff;
+    background: #1c1c22; border-radius: 32px;
+  }
+  .val { font-size: 1.3rem; font-weight: 700; }
+  #stop {
+    height: 64px; border: none; border-radius: 18px; font-size: 1.3rem; font-weight: 800;
+    background: #5a1f24; color: #ffd9dc; letter-spacing: .1em;
+  }
+  label.link { display: flex; align-items: center; gap: 6px; font-size: .85rem; color: #aab; }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Edge2 Remote</h1>
+    <div id="status">Connexion…</div>
+  </div>
+  <button class="appbtn" id="openApp">Ouvrir l'app</button>
+</header>
+
+<label class="link"><input type="checkbox" id="link"> Link (les deux moteurs ensemble)</label>
+
+<div class="sliders">
+  <div class="col">
+    <div class="lab">BASE</div>
+    <input type="range" id="m1" min="0" max="20" value="0">
+    <div class="val" id="v1">0</div>
+  </div>
+  <div class="col">
+    <div class="lab">TIGE</div>
+    <input type="range" id="m2" min="0" max="20" value="0">
+    <div class="val" id="v2">0</div>
+  </div>
+</div>
+
+<button id="stop">STOP</button>
+
+<script>
+  // id de session = dernier segment du chemin /s/<id>
+  var parts = location.pathname.split('/').filter(Boolean);
+  var id = parts.length >= 2 && parts[0] === 's' ? parts[1] : '';
+  var wsUrl = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws?id=' + id;
+
+  // Deep link vers l'app (fallback : reste sur cette page).
+  document.getElementById('openApp').onclick = function () {
+    location.href = 'edge2remote://control?ws=' + encodeURIComponent(wsUrl);
+  };
+
+  var ws, statusEl = document.getElementById('status');
+  function connect() {
+    ws = new WebSocket(wsUrl);
+    ws.onopen = function () { statusEl.textContent = 'Connecté'; statusEl.style.color = '#7d7'; };
+    ws.onclose = function () { statusEl.textContent = 'Déconnecté — reconnexion…'; statusEl.style.color = '#d77'; setTimeout(connect, 1000); };
+    ws.onerror = function () { ws.close(); };
+  }
+  connect();
+
+  function send(msg) { if (ws && ws.readyState === 1) ws.send(msg); }
+
+  var m1 = document.getElementById('m1'), m2 = document.getElementById('m2');
+  var v1 = document.getElementById('v1'), v2 = document.getElementById('v2');
+  var link = document.getElementById('link');
+
+  m1.oninput = function () {
+    v1.textContent = m1.value;
+    if (link.checked) { m2.value = m1.value; v2.textContent = m1.value; send('B:' + m1.value); }
+    else send('M1:' + m1.value);
+  };
+  m2.oninput = function () {
+    v2.textContent = m2.value;
+    if (link.checked) { m1.value = m2.value; v1.textContent = m2.value; send('B:' + m2.value); }
+    else send('M2:' + m2.value);
+  };
+  document.getElementById('stop').onclick = function () {
+    m1.value = 0; m2.value = 0; v1.textContent = '0'; v2.textContent = '0'; send('S');
+  };
+</script>
+</body>
+</html>
