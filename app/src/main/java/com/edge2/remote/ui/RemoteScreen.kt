@@ -20,6 +20,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -52,9 +53,11 @@ fun RemoteScreen(vm: RemoteViewModel, onRequestConnect: () -> Unit) {
     val link by vm.linkMode.collectAsStateWithLifecycle()
     val playing by vm.playing.collectAsStateWithLifecycle()
     val shareUrl by vm.shareUrl.collectAsStateWithLifecycle()
+    val imported by vm.importedPatterns.collectAsStateWithLifecycle()
 
     val connected = state is ConnectionState.Connected
     var shareOpen by remember { mutableStateOf(false) }
+    var importOpen by remember { mutableStateOf(false) }
 
     // État local des sliders (source de vérité du geste manuel).
     var baseF by remember { mutableFloatStateOf(0f) }
@@ -124,7 +127,7 @@ fun RemoteScreen(vm: RemoteViewModel, onRequestConnect: () -> Unit) {
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            BuiltinPatterns.all.forEach { pattern ->
+            (BuiltinPatterns.all + imported).forEach { pattern ->
                 FilterChip(
                     selected = playing == pattern.name,
                     onClick = {
@@ -134,12 +137,24 @@ fun RemoteScreen(vm: RemoteViewModel, onRequestConnect: () -> Unit) {
                     enabled = connected,
                 )
             }
+            AssistChip(
+                onClick = { importOpen = true },
+                label = { Text("+ Lovense") },
+            )
             Spacer(Modifier.fillMaxWidth(0.001f))
             FilterChip(
                 selected = link,
                 onClick = { vm.toggleLink() },
                 label = { Text("Link") },
                 enabled = connected,
+            )
+        }
+
+        if (importOpen) {
+            ImportDialog(
+                onImportUrl = { vm.importFromUrl(it); importOpen = false },
+                onImportText = { vm.importFromText(it); importOpen = false },
+                onDismiss = { importOpen = false },
             )
         }
 
@@ -186,6 +201,41 @@ fun RemoteScreen(vm: RemoteViewModel, onRequestConnect: () -> Unit) {
             Text("STOP", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
         }
     }
+}
+
+@Composable
+private fun ImportDialog(
+    onImportUrl: (String) -> Unit,
+    onImportText: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var input by remember { mutableStateOf("") }
+    val isUrl = input.trim().startsWith("http")
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(
+                onClick = { if (isUrl) onImportUrl(input) else onImportText(input) },
+                enabled = input.isNotBlank(),
+            ) { Text("Importer") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Annuler") } },
+        title = { Text("Importer un pattern Lovense") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    "Colle une URL .ta publique (CDN Lovense) OU le contenu .ta brut.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                OutlinedTextField(
+                    value = input,
+                    onValueChange = { input = it },
+                    label = { Text(if (isUrl) "URL .ta" else "URL ou contenu .ta") },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        },
+    )
 }
 
 @Composable
