@@ -1,0 +1,12 @@
+Control Lovense toys directly over Bluetooth LE — no Lovense app, no account, no cloud.
+
+Features:
+
+* Multi-toy: the UI adapts to each toy's actuators (vibration, dual motor, rotation, suction).
+* One-hand XY pad for two-motor toys; intensity presets; patterns; a random Tease mode; and a record mode (perform, then save it as a pattern).
+* Remote control by link, on the same Wi-Fi or over the internet, gated by a per-session PIN with an accept/refuse prompt and auto-expiry.
+* Keeps the connection alive in the background, plus a quick-settings STOP tile.
+* French / English / Spanish; dark and light themes.
+* 100% AOSP, no Google Play Services.
+
+Internet sharing routes traffic through localhost.run (a third party). Experimental community project — not affiliated with, or endorsed by, Lovense.
