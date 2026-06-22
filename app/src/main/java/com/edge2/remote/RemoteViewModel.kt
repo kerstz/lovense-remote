@@ -3,8 +3,11 @@ package com.edge2.remote
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.edge2.remote.ble.ConnectionState
 import com.edge2.remote.ble.DiscoveredToy
 import com.edge2.remote.ble.Edge2BleManager
+import com.edge2.remote.service.AppActions
+import com.edge2.remote.service.RemoteForegroundService
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import com.edge2.remote.pattern.LovenseImporter
@@ -40,6 +43,22 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
     /** Mode Link : un seul geste pilote les deux moteurs ensemble. */
     private val _linkMode = MutableStateFlow(false)
     val linkMode: StateFlow<Boolean> = _linkMode.asStateFlow()
+
+    init {
+        // Le bouton « Couper » de la notification coupe partage + connexion.
+        AppActions.onStop = { stopSharing(); disconnect() }
+        // Service premier-plan actif tant qu'un toy est connecté (BLE vivant
+        // en arrière-plan + notification persistante ; GrapheneOS-friendly).
+        viewModelScope.launch {
+            connectionState.collect { st ->
+                if (st is ConnectionState.Connected) {
+                    RemoteForegroundService.start(getApplication(), st.deviceName)
+                } else {
+                    RemoteForegroundService.stop(getApplication())
+                }
+            }
+        }
+    }
 
     // --- Partage à distance (host) ---------------------------------------
 
@@ -151,6 +170,8 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
 
     override fun onCleared() {
         super.onCleared()
+        AppActions.onStop = null
+        RemoteForegroundService.stop(getApplication())
         server.stop()
         tunnel.release()
         importer.close()

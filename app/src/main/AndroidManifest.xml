@@ -27,6 +27,13 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
 
+    <!-- Notifications (Android 13+ / GrapheneOS : exige une demande runtime). -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Service premier-plan : garde la liaison au toy vivante en arrière-plan. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
+    <!-- 100 % AOSP : aucune dépendance Google Play Services (fonts bundlées). -->
+
     <application
         android:allowBackup="true"
         android:label="@string/app_name"
@@ -50,5 +57,12 @@
                 <data android:scheme="edge2remote" android:host="control" />
             </intent-filter>
         </activity>
+
+        <!-- Service premier-plan « appareil connecté » : maintient le BLE/partage
+             actif en arrière-plan et affiche une notification persistante. -->
+        <service
+            android:name=".service.RemoteForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="connectedDevice" />
     </application>
 </manifest>

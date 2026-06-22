@@ -59,17 +59,27 @@ private fun App() {
 
     val discovered by vm.discovered.collectAsStateWithLifecycle()
 
-    // Demande les permissions BLE puis lance le scan si accordées.
+    // Demande les permissions BLE (+ notifications) puis lance le scan. Le refus
+    // de POST_NOTIFICATIONS ne bloque PAS le scan (la notif est optionnelle).
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions(),
-    ) { result -> if (result.values.all { it }) vm.scan() }
+    ) { result ->
+        val bleOk = result.filterKeys { it != Manifest.permission.POST_NOTIFICATIONS }.all { it.value }
+        if (bleOk) vm.scan()
+    }
 
     fun requestScan() {
-        val perms = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            arrayOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT)
-        } else {
-            arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)
-        }
+        val perms = buildList {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                add(Manifest.permission.BLUETOOTH_SCAN)
+                add(Manifest.permission.BLUETOOTH_CONNECT)
+            } else {
+                add(Manifest.permission.ACCESS_FINE_LOCATION)
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                add(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }.toTypedArray()
         permissionLauncher.launch(perms)
     }
 
