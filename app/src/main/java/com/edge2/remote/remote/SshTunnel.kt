@@ -1,5 +1,6 @@
 package com.edge2.remote.remote
 
+import android.content.Context
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -16,8 +17,16 @@ import net.schmizz.sshj.connection.channel.forwarded.RemotePortForwarder
 import net.schmizz.sshj.connection.channel.forwarded.SocketForwardingConnectListener
 import net.schmizz.sshj.transport.verification.PromiscuousVerifier
 import net.schmizz.sshj.userauth.keyprovider.KeyProvider
+import org.bouncycastle.jce.provider.BouncyCastleProvider
+import java.io.File
 import java.net.InetSocketAddress
+import java.security.KeyFactory
+import java.security.KeyPair
 import java.security.KeyPairGenerator
+import java.security.Security
+import java.security.interfaces.RSAPrivateCrtKey
+import java.security.spec.PKCS8EncodedKeySpec
+import java.security.spec.RSAPublicKeySpec
 
 /**
  * Tunnel internet via SSH vers **localhost.run** : expose le serveur embarqué
@@ -31,7 +40,11 @@ import java.security.KeyPairGenerator
  * Clé **ed25519** (les serveurs SSH récents rejettent l'ancien `ssh-rsa`/SHA-1).
  * Keep-alive + reconnexion automatique pour limiter les coupures.
  */
-class SshTunnel(private val scope: CoroutineScope) {
+class SshTunnel(context: Context, private val scope: CoroutineScope) {
+
+    // Clé persistée → localhost.run rend le MÊME sous-domaine à chaque partage
+    // (lié à la clé) → le lien partagé reste valable.
+    private val keyFile = File(context.filesDir, "lhr_id_rsa")
 
     private val _publicUrl = MutableStateFlow<String?>(null)
     val publicUrl: StateFlow<String?> = _publicUrl.asStateFlow()
@@ -56,14 +69,15 @@ class SshTunnel(private val scope: CoroutineScope) {
     }
 
     private fun runTunnel(localPort: Int) {
+        ensureFullBouncyCastle()
         val client = SSHClient(AndroidConfig())
         client.connectTimeout = 15_000
         client.addHostKeyVerifier(PromiscuousVerifier())
         client.connect("localhost.run", 22)
         ssh = client
 
-        // Clé RSA éphémère (sshj négocie rsa-sha2-256/512 avec les serveurs récents).
-        val kp = KeyPairGenerator.getInstance("RSA").apply { initialize(2048) }.genKeyPair()
+        // Clé RSA persistée (sshj négocie rsa-sha2-256/512 avec les serveurs récents).
+        val kp = persistentKeyPair()
         client.authPublickey("edge2", object : KeyProvider {
             override fun getPrivate() = kp.private
             override fun getPublic() = kp.public
@@ -88,11 +102,44 @@ class SshTunnel(private val scope: CoroutineScope) {
         }
     }
 
+    /** Charge la clé RSA persistée, ou en génère une et la sauve (PKCS8). */
+    private fun persistentKeyPair(): KeyPair {
+        if (keyFile.exists()) {
+            runCatching {
+                val priv = KeyFactory.getInstance("RSA")
+                    .generatePrivate(PKCS8EncodedKeySpec(keyFile.readBytes())) as RSAPrivateCrtKey
+                val pub = KeyFactory.getInstance("RSA")
+                    .generatePublic(RSAPublicKeySpec(priv.modulus, priv.publicExponent))
+                return KeyPair(pub, priv)
+            }
+        }
+        val kp = KeyPairGenerator.getInstance("RSA").apply { initialize(2048) }.genKeyPair()
+        runCatching { keyFile.writeBytes(kp.private.encoded) }
+        return kp
+    }
+
     fun stop() {
         job?.cancel()
         job = null
         runCatching { ssh?.disconnect() }
         ssh = null
         _publicUrl.value = null
+    }
+
+    companion object {
+        @Volatile private var bcReplaced = false
+
+        /**
+         * Le provider "BC" d'Android est allégé (pas de X25519) → le key exchange
+         * curve25519 de SSH échoue. On le remplace par le BouncyCastle complet
+         * (bundlé via sshj) qui fournit X25519.
+         */
+        @Synchronized
+        private fun ensureFullBouncyCastle() {
+            if (bcReplaced) return
+            Security.removeProvider("BC")
+            Security.insertProviderAt(BouncyCastleProvider(), 1)
+            bcReplaced = true
+        }
     }
 }
