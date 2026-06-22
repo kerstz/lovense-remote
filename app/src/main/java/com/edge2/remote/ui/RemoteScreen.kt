@@ -1,27 +1,27 @@
 package com.edge2.remote.ui
 
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.layout.width
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.AssistChip
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -33,259 +33,298 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.edge2.remote.remote.NetworkUtils
+import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.edge2.remote.RemoteViewModel
 import com.edge2.remote.ble.ConnectionState
 import com.edge2.remote.ble.Motor
 import com.edge2.remote.pattern.BuiltinPatterns
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.edge2.remote.pattern.Pattern
+import com.edge2.remote.remote.NetworkUtils
+import com.edge2.remote.ui.theme.Edge2
+import com.edge2.remote.ui.theme.JetBrainsMono
+import kotlin.math.roundToInt
+import kotlin.math.sin
 
 /**
- * Télécommande une main : statut en haut, presets + patterns au milieu, deux
- * gros sliders verticaux + STOP en bas (zone du pouce).
- *
- * [onRequestConnect] délègue à l'Activity la demande de permissions avant scan.
+ * Écran principal (toy connecté) — design `Edge2 Remote.dc.html` : pad XY pour
+ * piloter les deux moteurs d'un pouce, readouts BASE/TIGE, patterns, Link + presets.
  */
 @Composable
-fun RemoteScreen(vm: RemoteViewModel, onRequestConnect: () -> Unit) {
+fun RemoteScreen(vm: RemoteViewModel, onDisconnect: () -> Unit) {
+    val c = Edge2.colors
     val state by vm.connectionState.collectAsStateWithLifecycle()
     val link by vm.linkMode.collectAsStateWithLifecycle()
     val playing by vm.playing.collectAsStateWithLifecycle()
+    val levels by vm.motorLevels.collectAsStateWithLifecycle()
     val shareUrl by vm.shareUrl.collectAsStateWithLifecycle()
     val tunnelUrl by vm.tunnelUrl.collectAsStateWithLifecycle()
     val tunnelConnected by vm.tunnelConnected.collectAsStateWithLifecycle()
     val imported by vm.importedPatterns.collectAsStateWithLifecycle()
 
-    val connected = state is ConnectionState.Connected
+    val battery = (state as? ConnectionState.Connected)?.battery
     var shareOpen by remember { mutableStateOf(false) }
     var importOpen by remember { mutableStateOf(false) }
 
-    // État local des sliders (source de vérité du geste manuel).
-    var baseF by remember { mutableFloatStateOf(0f) }
-    var shaftF by remember { mutableFloatStateOf(0f) }
+    // Drag manuel = source de vérité ; pendant un pattern, on suit les moteurs réels.
+    var localBase by remember { mutableFloatStateOf(0f) }
+    var localTige by remember { mutableFloatStateOf(0f) }
+    val baseF = if (playing != null) levels.base / 20f else localBase
+    val tigeF = if (playing != null) levels.shaft / 20f else localTige
 
-    fun applyBase(f: Float) {
-        baseF = f
-        if (link) { shaftF = f; vm.setBoth(f) } else vm.setMotor(Motor.BASE, f)
+    fun applyXY(x: Float, y: Float) {
+        if (link) { val m = (x + y) / 2f; localBase = m; localTige = m; vm.setXY(m, m) }
+        else { localBase = x; localTige = y; vm.setXY(x, y) }
     }
-    fun applyShaft(f: Float) {
-        shaftF = f
-        if (link) { baseF = f; vm.setBoth(f) } else vm.setMotor(Motor.SHAFT, f)
-    }
-    fun applyBoth(f: Float) { baseF = f; shaftF = f; vm.setBoth(f) }
-    fun stopAll() { baseF = 0f; shaftF = 0f; vm.stopAll() }
+    fun preset(f: Float) { localBase = f; localTige = f; vm.setBoth(f) }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+            .background(c.bg)
+            .padding(horizontal = 22.dp, vertical = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(13.dp),
     ) {
-        // --- Statut + connexion -----------------------------------------
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
+        // --- En-tête : appareil + état + batterie + actions partage --------
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Column {
-                Text("Edge2 Remote", style = MaterialTheme.typography.titleMedium)
-                Text(statusLabel(state), style = MaterialTheme.typography.bodyMedium)
+                Text("Edge 2", color = c.ink, fontWeight = FontWeight.Bold, fontSize = 21.sp)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Box(Modifier.size(7.dp).clip(CircleShape).background(c.live))
+                    Text("Connecté · BLE direct", color = c.live, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                }
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                if (connected) {
-                    TextButton(onClick = { vm.startSharing(); shareOpen = true }) { Text("Partager") }
-                    OutlinedButton(onClick = { vm.disconnect() }) { Text("Couper") }
-                } else {
-                    Button(onClick = onRequestConnect) { Text("Connecter") }
+            Column(horizontalAlignment = Alignment.End) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    BatteryGlyph(battery)
+                    Text(battery?.let { "$it% batterie" } ?: "BLE", color = c.muted, fontFamily = JetBrainsMono, fontWeight = FontWeight.Medium, fontSize = 11.sp)
+                }
+                Spacer(Modifier.size(6.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    GhostChip("Partager") { vm.startSharing(); shareOpen = true }
+                    GhostChip("Couper") { onDisconnect() }
                 }
             }
         }
 
-        if (shareOpen) {
-            ShareDialog(
-                lanUrl = shareUrl,
-                tunnelUrl = tunnelUrl,
-                tunnelConnected = tunnelConnected,
-                onDismiss = { vm.stopSharing(); shareOpen = false },
-            )
+        Text(
+            "Glisse le point — horizontal = base · vertical = tige",
+            color = c.muted, fontSize = 11.sp, modifier = Modifier.fillMaxWidth(),
+        )
+
+        // --- Pad XY (signature) --------------------------------------------
+        XYPad(
+            base = baseF, tige = tigeF, onChange = ::applyXY,
+            modifier = Modifier.fillMaxWidth().aspectRatio(1f),
+        )
+
+        // --- Readouts BASE / TIGE ------------------------------------------
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(11.dp)) {
+            Readout("BASE", c.base, (baseF * 100).roundToInt())
+            Readout("TIGE", c.tige, (tigeF * 100).roundToInt())
         }
 
-        // --- Presets d'intensité ----------------------------------------
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            listOf(0 to "0", 5 to "25%", 10 to "50%", 15 to "75%", 20 to "100%").forEach { (lvl, lab) ->
-                AssistChip(
-                    onClick = { applyBoth(lvl / 20f) },
-                    label = { Text(lab) },
-                    enabled = connected,
-                )
+        // --- Patterns pré-enregistrés --------------------------------------
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Text("PRÉ-ENREGISTRÉ", color = c.faint, fontWeight = FontWeight.SemiBold, fontSize = 10.sp, letterSpacing = 2.5.sp)
+            if (playing != null) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(5.dp),
+                    modifier = Modifier.clickable { vm.stopAll() },
+                ) {
+                    Box(Modifier.size(6.dp).clip(CircleShape).background(c.live))
+                    Text("EN LECTURE · STOP", color = c.live, fontWeight = FontWeight.SemiBold, fontSize = 10.sp, letterSpacing = 1.sp)
+                }
             }
         }
-
-        // --- Patterns + Link --------------------------------------------
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            (BuiltinPatterns.all + imported).forEach { pattern ->
-                FilterChip(
-                    selected = playing == pattern.name,
-                    onClick = {
-                        if (playing == pattern.name) stopAll() else vm.playPattern(pattern)
-                    },
-                    label = { Text(pattern.name) },
-                    enabled = connected,
-                )
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            (BuiltinPatterns.all + imported).forEachIndexed { i, p ->
+                PatternChip(p.name, i, playing == p.name, Modifier.weight(1f)) {
+                    if (playing == p.name) vm.stopAll() else vm.playPattern(p)
+                }
             }
-            AssistChip(
-                onClick = { importOpen = true },
-                label = { Text("+ Lovense") },
-            )
-            Spacer(Modifier.fillMaxWidth(0.001f))
-            FilterChip(
-                selected = link,
-                onClick = { vm.toggleLink() },
-                label = { Text("Link") },
-                enabled = connected,
-            )
+            PatternChip("+ Lovense", -1, false, Modifier.weight(1f)) { importOpen = true }
         }
 
-        if (importOpen) {
-            ImportDialog(
-                onImportUrl = { vm.importFromUrl(it); importOpen = false },
-                onImportText = { vm.importFromText(it); importOpen = false },
-                onDismiss = { importOpen = false },
-            )
+        // --- Link + presets -------------------------------------------------
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(9.dp), verticalAlignment = Alignment.CenterVertically) {
+            LinkToggle(link) { vm.toggleLink() }
+            PresetButton("Doux", Modifier.weight(1f)) { preset(0.30f) }
+            PresetButton("Moyen", Modifier.weight(1f)) { preset(0.60f) }
+            PresetButton("Fort", Modifier.weight(1f)) { preset(0.90f) }
         }
+    }
 
-        // --- Deux gros sliders verticaux (zone pouce) -------------------
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f),
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            VerticalSlider(
-                fraction = baseF,
-                onFraction = ::applyBase,
-                label = "BASE",
-                enabled = connected,
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight(),
-            )
-            VerticalSlider(
-                fraction = shaftF,
-                onFraction = ::applyShaft,
-                label = "TIGE",
-                enabled = connected,
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight(),
-            )
-        }
+    if (shareOpen) {
+        ShareDialog(shareUrl, tunnelUrl, tunnelConnected) { vm.stopSharing(); shareOpen = false }
+    }
+    if (importOpen) {
+        ImportDialog(
+            onImportUrl = { vm.importFromUrl(it); importOpen = false },
+            onImportText = { vm.importFromText(it); importOpen = false },
+            onDismiss = { importOpen = false },
+        )
+    }
+}
 
-        // --- STOP --------------------------------------------------------
-        Button(
-            onClick = { stopAll() },
-            enabled = connected,
-            colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.errorContainer,
-                contentColor = MaterialTheme.colorScheme.onErrorContainer,
-            ),
-            shape = RoundedCornerShape(20.dp),
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(64.dp),
-        ) {
-            Text("STOP", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+@Composable
+private fun RowScope.Readout(label: String, accent: Color, value: Int) {
+    val c = Edge2.colors
+    Column(
+        Modifier.weight(1f).clip(RoundedCornerShape(15.dp))
+            .background(accent.copy(alpha = .08f))
+            .border(1.dp, accent.copy(alpha = .25f), RoundedCornerShape(15.dp))
+            .padding(horizontal = 15.dp, vertical = 11.dp),
+    ) {
+        Text(label, color = accent, fontWeight = FontWeight.SemiBold, fontSize = 10.sp, letterSpacing = 2.sp)
+        Row(verticalAlignment = Alignment.Bottom) {
+            Text("$value", color = c.ink, fontFamily = JetBrainsMono, fontWeight = FontWeight.Bold, fontSize = 26.sp)
+            Text("%", color = c.muted, fontFamily = JetBrainsMono, fontSize = 13.sp, modifier = Modifier.padding(bottom = 3.dp))
         }
     }
 }
 
 @Composable
-private fun ImportDialog(
-    onImportUrl: (String) -> Unit,
-    onImportText: (String) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    var input by remember { mutableStateOf("") }
-    val isUrl = input.trim().startsWith("http")
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        confirmButton = {
-            TextButton(
-                onClick = { if (isUrl) onImportUrl(input) else onImportText(input) },
-                enabled = input.isNotBlank(),
-            ) { Text("Importer") }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Annuler") } },
-        title = { Text("Importer un pattern Lovense") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    "Colle une URL .ta publique (CDN Lovense) OU le contenu .ta brut.",
-                    style = MaterialTheme.typography.bodySmall,
-                )
-                OutlinedTextField(
-                    value = input,
-                    onValueChange = { input = it },
-                    label = { Text(if (isUrl) "URL .ta" else "URL ou contenu .ta") },
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
-        },
+private fun PatternChip(label: String, index: Int, active: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    val c = Edge2.colors
+    val border = if (active) c.gradStart else c.outline
+    val fg = if (active) c.ink else c.muted
+    Column(
+        modifier
+            .clip(RoundedCornerShape(13.dp))
+            .background(if (active) c.gradStart.copy(alpha = .16f) else c.surface.copy(alpha = if (c.isDark) .35f else 1f))
+            .border(1.dp, border, RoundedCornerShape(13.dp))
+            .clickable { onClick() }
+            .padding(vertical = 9.dp, horizontal = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(5.dp),
+    ) {
+        Canvas(Modifier.size(width = 34.dp, height = 14.dp)) { drawWave(index, fg) }
+        Text(label, color = fg, fontWeight = FontWeight.SemiBold, fontSize = 10.sp, maxLines = 1)
+    }
+}
+
+/** Petite onde : sinus / carré / rampe selon l'index (purement décoratif). */
+private fun DrawScope.drawWave(index: Int, color: Color) {
+    val w = size.width; val h = size.height; val mid = h / 2f
+    val path = androidx.compose.ui.graphics.Path()
+    val steps = 28
+    for (i in 0..steps) {
+        val t = i / steps.toFloat()
+        val x = t * w
+        val y = when (index) {
+            1 -> mid - (if ((t * 4).toInt() % 2 == 0) h * .38f else -h * .38f) // carré (Pulse)
+            2 -> h - t * h                                                      // rampe (Montée)
+            else -> mid - sin(t * 2 * Math.PI * 2).toFloat() * h * .38f         // sinus
+        }
+        if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+    }
+    drawPath(path, color, style = Stroke(width = 1.8.dp.toPx(), cap = StrokeCap.Round))
+}
+
+@Composable
+private fun LinkToggle(active: Boolean, onClick: () -> Unit) {
+    val c = Edge2.colors
+    val fg = if (active) Color.White else c.muted
+    Box(
+        Modifier.size(44.dp).clip(RoundedCornerShape(13.dp))
+            .background(if (active) c.gradStart else c.surface.copy(alpha = if (c.isDark) .35f else 1f))
+            .border(1.dp, if (active) c.gradStart else c.outline, RoundedCornerShape(13.dp))
+            .clickable { onClick() },
+        contentAlignment = Alignment.Center,
+    ) {
+        Canvas(Modifier.size(20.dp)) {
+            val r = size.minDimension * .26f
+            val cy = size.height / 2f
+            drawCircle(fg, radius = r, center = Offset(size.width * .36f, cy), style = Stroke(2.dp.toPx()))
+            drawCircle(fg, radius = r, center = Offset(size.width * .64f, cy), style = Stroke(2.dp.toPx()))
+        }
+    }
+}
+
+@Composable
+private fun PresetButton(label: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    val c = Edge2.colors
+    Text(
+        label, color = c.ink, fontWeight = FontWeight.SemiBold, fontSize = 13.sp,
+        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+        modifier = modifier
+            .clip(RoundedCornerShape(13.dp))
+            .background(c.surface.copy(alpha = if (c.isDark) .35f else 1f))
+            .border(1.dp, c.outline, RoundedCornerShape(13.dp))
+            .clickable { onClick() }
+            .padding(vertical = 13.dp),
     )
 }
 
 @Composable
-private fun ShareDialog(
-    lanUrl: String?,
-    tunnelUrl: String?,
-    tunnelConnected: Boolean,
-    onDismiss: () -> Unit,
-) {
+private fun GhostChip(label: String, onClick: () -> Unit) {
+    val c = Edge2.colors
+    Text(
+        label, color = c.muted, fontWeight = FontWeight.SemiBold, fontSize = 12.sp,
+        modifier = Modifier.clip(RoundedCornerShape(10.dp)).border(1.dp, c.outline, RoundedCornerShape(10.dp))
+            .clickable { onClick() }.padding(horizontal = 11.dp, vertical = 6.dp),
+    )
+}
+
+@Composable
+private fun BatteryGlyph(level: Int?) {
+    val c = Edge2.colors
+    Canvas(Modifier.size(width = 26.dp, height = 13.dp)) {
+        val bodyW = size.width * .88f
+        val r = 3.dp.toPx()
+        drawRoundRect(
+            c.muted.copy(alpha = .35f),
+            size = androidx.compose.ui.geometry.Size(bodyW, size.height),
+            cornerRadius = androidx.compose.ui.geometry.CornerRadius(r, r),
+            style = Stroke(1.5.dp.toPx()),
+        )
+        drawRoundRect(
+            c.muted.copy(alpha = .35f),
+            topLeft = Offset(bodyW + 1.dp.toPx(), size.height * .28f),
+            size = androidx.compose.ui.geometry.Size(2.5.dp.toPx(), size.height * .44f),
+            cornerRadius = androidx.compose.ui.geometry.CornerRadius(r, r),
+        )
+        val pad = 2.dp.toPx()
+        val fillW = ((bodyW - pad * 2) * ((level ?: 0) / 100f)).coerceAtLeast(0f)
+        drawRoundRect(
+            c.live,
+            topLeft = Offset(pad, pad),
+            size = androidx.compose.ui.geometry.Size(fillW, size.height - pad * 2),
+            cornerRadius = androidx.compose.ui.geometry.CornerRadius(1.5.dp.toPx(), 1.5.dp.toPx()),
+        )
+    }
+}
+
+// --- Dialogs (Phase 4B + import) — héritent du thème Edge2 -----------------
+
+@Composable
+private fun ShareDialog(lanUrl: String?, tunnelUrl: String?, tunnelConnected: Boolean, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
         confirmButton = { TextButton(onClick = onDismiss) { Text("Arrêter le partage") } },
         title = { Text("Contrôle à distance") },
         text = {
-            Column(
-                modifier = Modifier.verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-            ) {
-                // --- Internet (tunnel) : marche de partout -------------------
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 if (tunnelUrl != null) {
-                    val state = if (tunnelConnected) "relais connecté ✓" else "connexion au relais…"
-                    ShareBlock(
-                        title = "Internet — $state",
-                        hint = "Ouvre ce lien de N'IMPORTE OÙ (4G/WiFi, autre réseau) :",
-                        url = tunnelUrl,
-                    )
+                    val s = if (tunnelConnected) "relais connecté ✓" else "connexion au relais…"
+                    ShareBlock("Internet — $s", "Ouvre ce lien de N'IMPORTE OÙ (4G/autre réseau) :", tunnelUrl)
                 }
-
-                // --- LAN : même WiFi, latence minimale -----------------------
                 when {
-                    lanUrl != null -> ShareBlock(
-                        title = "Même WiFi (LAN)",
-                        hint = "Plus réactif si vous êtes sur le même WiFi :",
-                        url = lanUrl,
-                    )
-                    tunnelUrl == null -> Text(
-                        "Aucun WiFi détecté et tunnel non configuré. Connecte un WiFi pour le LAN, ou règle RelayConfig.BASE_URL pour le tunnel internet.",
-                    )
+                    lanUrl != null -> ShareBlock("Même WiFi (LAN)", "Plus réactif sur le même WiFi :", lanUrl)
+                    tunnelUrl == null -> Text("Aucun WiFi détecté et tunnel non configuré. Connecte un WiFi, ou règle RelayConfig.BASE_URL.")
                 }
-
-                Text(
-                    "Tant que ce partage est ouvert, qui a le lien pilote le toy.",
-                    style = MaterialTheme.typography.bodySmall,
-                )
+                Text("Tant que ce partage est ouvert, qui a le lien pilote le toy.", style = MaterialTheme.typography.bodySmall)
             }
         },
     )
@@ -298,21 +337,30 @@ private fun ShareBlock(title: String, hint: String, url: String) {
         Text(hint, style = MaterialTheme.typography.bodySmall)
         Text(url, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
         val qr = remember(url) { NetworkUtils.qrBitmap(url, 480).asImageBitmap() }
-        Image(
-            bitmap = qr,
-            contentDescription = "QR du lien de contrôle",
-            modifier = Modifier
-                .width(200.dp)
-                .height(200.dp),
-        )
+        Image(bitmap = qr, contentDescription = "QR du lien de contrôle", modifier = Modifier.size(200.dp))
     }
 }
 
-private fun statusLabel(state: ConnectionState): String = when (state) {
-    is ConnectionState.Disconnected -> "Déconnecté"
-    is ConnectionState.Scanning -> "Recherche…"
-    is ConnectionState.Connecting -> "Connexion…"
-    is ConnectionState.Connected ->
-        state.deviceName + (state.battery?.let { " · $it%" } ?: "")
-    is ConnectionState.Error -> "Erreur : ${state.reason}"
+@Composable
+private fun ImportDialog(onImportUrl: (String) -> Unit, onImportText: (String) -> Unit, onDismiss: () -> Unit) {
+    var input by remember { mutableStateOf("") }
+    val isUrl = input.trim().startsWith("http")
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(onClick = { if (isUrl) onImportUrl(input) else onImportText(input) }, enabled = input.isNotBlank()) { Text("Importer") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Annuler") } },
+        title = { Text("Importer un pattern Lovense") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Colle une URL .ta publique (CDN Lovense) OU le contenu .ta brut.", style = MaterialTheme.typography.bodySmall)
+                OutlinedTextField(
+                    value = input, onValueChange = { input = it },
+                    label = { Text(if (isUrl) "URL .ta" else "URL ou contenu .ta") },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        },
+    )
 }

@@ -104,6 +104,13 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
         ble.setMotor(Motor.SHAFT, fraction)
     }
 
+    /** Réglage du pad XY : base et tige indépendants (interrompt un pattern). */
+    fun setXY(base: Float, tige: Float) {
+        player.cancel()
+        ble.setMotor(Motor.BASE, base)
+        ble.setMotor(Motor.SHAFT, tige)
+    }
+
     fun playPattern(pattern: Pattern) = player.play(pattern)
 
     // --- Import de patterns Lovense (.ta public) -------------------------

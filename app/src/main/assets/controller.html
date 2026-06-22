@@ -4,103 +4,210 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>Edge2 Remote — Contrôle</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
 <style>
   :root { color-scheme: dark; }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   body {
-    margin: 0; font-family: system-ui, sans-serif; background: #111114; color: #eee;
-    height: 100dvh; display: flex; flex-direction: column; padding: 16px; gap: 12px;
+    margin: 0; font-family: 'Space Grotesk', system-ui, sans-serif; color: #fff;
+    background: radial-gradient(120% 70% at 50% 0%, #1A1622, #0C0C12);
+    min-height: 100dvh; display: flex; flex-direction: column; padding: 16px; gap: 14px;
   }
-  header { display: flex; justify-content: space-between; align-items: center; }
-  h1 { font-size: 1.1rem; margin: 0; }
-  #status { font-size: .85rem; color: #9aa; }
-  .appbtn {
-    background: #2a2a33; color: #ddd; border: 1px solid #3a3a45; border-radius: 12px;
-    padding: 8px 12px; font-size: .85rem;
+  .mono { font-family: 'JetBrains Mono', monospace; }
+  .muted { color: #8A8A97; }
+
+  /* Bannière live */
+  .live {
+    display: flex; align-items: center; gap: 11px; padding: 13px 15px; border-radius: 15px;
+    background: linear-gradient(90deg, rgba(70,224,160,.14), rgba(70,224,160,.04));
+    border: 1px solid rgba(70,224,160,.28);
   }
-  .sliders { flex: 1; display: flex; gap: 14px; min-height: 0; }
-  .col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 8px; }
-  .lab { font-size: .8rem; color: #aab; letter-spacing: .05em; }
-  input[type=range] {
-    writing-mode: vertical-lr; direction: rtl;       /* bas = 0, haut = max */
-    width: 64px; flex: 1; accent-color: #b066ff;
-    background: #1c1c22; border-radius: 32px;
+  .ping { position: relative; width: 10px; height: 10px; flex: none; }
+  .ping span { position: absolute; inset: 0; border-radius: 50%; background: #46E0A0; }
+  .ping .b { animation: ping 1.6s infinite; }
+  @keyframes ping { 0% { transform: scale(1); opacity: .7 } 70%,100% { transform: scale(2.6); opacity: 0 } }
+  @keyframes pulseRing { 0% { transform: scale(.45); opacity: .55 } 100% { transform: scale(1.1); opacity: 0 } }
+  .live.off { background: rgba(255,255,255,.04); border-color: rgba(255,255,255,.1); }
+  .live.off .ping span { background: #8A8A97; }
+
+  .hint { font-size: 11px; text-align: center; color: #8A8A97; }
+
+  /* Pad XY */
+  #pad {
+    position: relative; width: 100%; aspect-ratio: 1; border-radius: 24px; background: #0F0F17;
+    border: 1px solid rgba(255,255,255,.08); overflow: hidden; touch-action: none; cursor: crosshair;
+    box-shadow: inset 0 2px 14px rgba(0,0,0,.5);
   }
-  .val { font-size: 1.3rem; font-weight: 700; }
-  #stop {
-    height: 64px; border: none; border-radius: 18px; font-size: 1.3rem; font-weight: 800;
-    background: #5a1f24; color: #ffd9dc; letter-spacing: .1em;
-  }
-  label.link { display: flex; align-items: center; gap: 6px; font-size: .85rem; color: #aab; }
+  #pad .grid { position: absolute; inset: 0; pointer-events: none;
+    background-image: linear-gradient(rgba(255,255,255,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px);
+    background-size: 25% 25%; }
+  #pad .wash { position: absolute; inset: 0; pointer-events: none;
+    background: linear-gradient(90deg,rgba(139,107,255,.10),transparent 55%),linear-gradient(0deg,rgba(255,92,122,.10),transparent 55%); }
+  #vx { position: absolute; top: 0; bottom: 0; width: 1.5px; background: rgba(169,139,255,.45); pointer-events: none; }
+  #hy { position: absolute; left: 0; right: 0; height: 1.5px; background: rgba(255,139,161,.45); pointer-events: none; }
+  #pad .lbBase { position: absolute; left: 10px; bottom: 9px; font-size: 9px; font-weight: 600; letter-spacing: 2px; color: rgba(169,139,255,.7); pointer-events: none; }
+  #pad .lbTige { position: absolute; left: 9px; top: 10px; font-size: 9px; font-weight: 600; letter-spacing: 2px; color: rgba(255,139,161,.7); pointer-events: none; writing-mode: vertical-rl; transform: rotate(180deg); }
+  #dot { position: absolute; width: 34px; height: 34px; margin: -17px 0 0 -17px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%,#fff,#C9B8FF); border: 2px solid #fff;
+    box-shadow: 0 0 24px rgba(160,130,255,.85),0 4px 12px rgba(0,0,0,.5); pointer-events: none; }
+
+  /* Readouts */
+  .reads { display: flex; gap: 11px; }
+  .read { flex: 1; border-radius: 15px; padding: 11px 15px; }
+  .read.base { background: rgba(139,107,255,.08); border: 1px solid rgba(139,107,255,.25); }
+  .read.tige { background: rgba(255,92,122,.08); border: 1px solid rgba(255,92,122,.25); }
+  .read .k { font-size: 10px; font-weight: 600; letter-spacing: 2px; }
+  .read.base .k { color: #A98BFF; } .read.tige .k { color: #FF8BA1; }
+  .read .v { font-family: 'JetBrains Mono'; font-weight: 700; font-size: 26px; line-height: 1.1; }
+  .read .v small { font-size: 13px; color: #8A8A97; }
+
+  /* Contrôles bas */
+  .ctrls { display: flex; gap: 9px; align-items: center; }
+  .chip { flex: 1; padding: 13px; border-radius: 13px; text-align: center; font-weight: 600; font-size: 13px;
+    background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.08); color: #C9C9D2; cursor: pointer; }
+  .chip.on { background: rgba(139,107,255,.16); border-color: #8B6BFF; color: #fff; }
+  #link { flex: none; width: 46px; height: 46px; display: flex; align-items: center; justify-content: center; padding: 0; }
+  #stop { width: 100%; padding: 16px; border-radius: 15px; font-weight: 600; font-size: 13px; letter-spacing: 2.5px;
+    background: rgba(255,92,122,.09); border: 1px solid rgba(255,92,122,.28); color: #FF8BA1; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; gap: 9px; }
+  #stop .sq { width: 12px; height: 12px; border-radius: 3px; background: #FF5C7A; }
+  .spacer { flex: 1; }
+  .appbtn { background: none; border: none; color: #8A8A97; font-family: 'Space Grotesk'; font-size: 12px; font-weight: 600; cursor: pointer; }
+
+  /* Overlay invitation */
+  #intro { position: fixed; inset: 0; z-index: 10; display: flex; flex-direction: column; align-items: center;
+    justify-content: center; gap: 16px; padding: 32px; text-align: center;
+    background: radial-gradient(120% 70% at 50% 0%, #1A1622, #0C0C12); }
+  .orb { position: relative; width: 150px; height: 150px; display: flex; align-items: center; justify-content: center; margin-bottom: 8px; }
+  .orb .ring { position: absolute; width: 150px; height: 150px; border-radius: 50%; border: 1.5px solid rgba(139,107,255,.5); animation: pulseRing 2.6s ease-out infinite; }
+  .orb .ring:nth-child(2) { border-color: rgba(255,92,122,.45); animation-delay: .9s; }
+  .orb .ring:nth-child(3) { animation-delay: 1.8s; }
+  .orb .core { width: 84px; height: 84px; border-radius: 50%; background: linear-gradient(135deg,#8B6BFF,#FF5C7A);
+    display: flex; align-items: center; justify-content: center; box-shadow: 0 0 30px rgba(139,107,255,.55); }
+  .eyebrow { font-size: 11px; font-weight: 700; letter-spacing: 3px; color: #A98BFF; }
+  .btn-primary { width: 100%; max-width: 320px; padding: 16px; border-radius: 17px; border: none; cursor: pointer;
+    background: linear-gradient(135deg,#8B6BFF,#7857FF); color: #fff; font-family: 'Space Grotesk'; font-weight: 600; font-size: 15px;
+    box-shadow: 0 8px 24px rgba(124,87,255,.42); }
+  .btn-ghost { width: 100%; max-width: 320px; padding: 15px; border-radius: 17px; cursor: pointer;
+    background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.12); color: #C9C9D2; font-family: 'Space Grotesk'; font-weight: 600; font-size: 14px; }
+  .lock { font-size: 10.5px; color: #5E5E6A; display: flex; align-items: center; justify-content: center; gap: 6px; }
 </style>
 </head>
 <body>
-<header>
-  <div>
-    <h1>Edge2 Remote</h1>
-    <div id="status">Connexion…</div>
-  </div>
-  <button class="appbtn" id="openApp">Ouvrir l'app</button>
-</header>
 
-<label class="link"><input type="checkbox" id="link"> Link (les deux moteurs ensemble)</label>
-
-<div class="sliders">
-  <div class="col">
-    <div class="lab">BASE</div>
-    <input type="range" id="m1" min="0" max="20" value="0">
-    <div class="val" id="v1">0</div>
+<!-- Étape 1 : invitation -->
+<div id="intro">
+  <div class="orb">
+    <div class="ring"></div><div class="ring"></div><div class="ring"></div>
+    <div class="core"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 7l10 10-5 5V2l5 5L7 17"/></svg></div>
   </div>
-  <div class="col">
-    <div class="lab">TIGE</div>
-    <input type="range" id="m2" min="0" max="20" value="0">
-    <div class="val" id="v2">0</div>
-  </div>
+  <div class="eyebrow">INVITATION</div>
+  <div style="font-size:23px;font-weight:700;line-height:1.22;">Tu es invité·e à<br>prendre les commandes</div>
+  <div class="muted" style="font-size:13px;line-height:1.45;">Contrôle en direct de l'Edge 2 · session temporaire</div>
+  <div class="spacer" style="max-height:24px;"></div>
+  <button class="btn-primary" id="openApp">Ouvrir dans l'app Edge</button>
+  <button class="btn-ghost" id="goWeb">Continuer sur le web</button>
+  <div class="lock">🔒 Connexion chiffrée · aucune donnée stockée</div>
 </div>
 
-<button id="stop">STOP</button>
+<!-- Étape 2 : contrôle -->
+<div class="live off" id="liveBar">
+  <span class="ping"><span class="b"></span><span></span></span>
+  <div style="flex:1;">
+    <div style="font-weight:600;font-size:13px;" id="liveTitle">Connexion…</div>
+    <div style="font-size:11px;color:#7FD9B0;" id="liveSub">Établissement du lien</div>
+  </div>
+  <button class="appbtn" id="openApp2">Ouvrir l'app</button>
+</div>
+
+<div class="hint">Glisse le point — horizontal = base · vertical = tige</div>
+
+<div id="pad">
+  <div class="grid"></div><div class="wash"></div>
+  <div id="vx"></div><div id="hy"></div>
+  <div class="lbBase">BASE →</div><div class="lbTige">TIGE →</div>
+  <div id="dot"></div>
+</div>
+
+<div class="reads">
+  <div class="read base"><div class="k">BASE</div><div class="v"><span id="vBase">0</span><small>%</small></div></div>
+  <div class="read tige"><div class="k">TIGE</div><div class="v"><span id="vTige">0</span><small>%</small></div></div>
+</div>
+
+<div class="ctrls">
+  <button class="chip" id="link"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 12a3 3 0 0 1 3-3h3a3 3 0 0 1 0 6h-1"/><path d="M15 12a3 3 0 0 1-3 3H9a3 3 0 0 1 0-6h1"/></svg></button>
+  <button class="chip" data-preset="30">Doux</button>
+  <button class="chip" data-preset="60">Moyen</button>
+  <button class="chip" data-preset="90">Fort</button>
+</div>
+
+<div class="spacer"></div>
+
+<button id="stop"><span class="sq"></span>TOUT ARRÊTER</button>
 
 <script>
   // id de session = dernier segment du chemin /s/<id>
   var parts = location.pathname.split('/').filter(Boolean);
   var id = parts.length >= 2 && parts[0] === 's' ? parts[1] : '';
-  // __WS_PATH__ est substitué par le serveur qui sert cette page : "/ws" pour le
-  // serveur embarqué (LAN), "/ctrl" pour le relais internet (Phase 4B).
+  // __WS_PATH__ substitué par le serveur : "/ws" (app embarquée) ou "/ctrl" (relais).
   var wsUrl = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '__WS_PATH__?id=' + id;
+  var deepLink = 'edge2remote://control?ws=' + encodeURIComponent(wsUrl);
 
-  // Deep link vers l'app (fallback : reste sur cette page).
-  document.getElementById('openApp').onclick = function () {
-    location.href = 'edge2remote://control?ws=' + encodeURIComponent(wsUrl);
-  };
+  document.getElementById('intro').style.display = 'flex';
+  document.getElementById('goWeb').onclick = function () { document.getElementById('intro').style.display = 'none'; };
+  document.getElementById('openApp').onclick = function () { location.href = deepLink; };
+  document.getElementById('openApp2').onclick = function () { location.href = deepLink; };
 
-  var ws, statusEl = document.getElementById('status');
+  // --- WebSocket ---
+  var ws, live = document.getElementById('liveBar'),
+      lt = document.getElementById('liveTitle'), ls = document.getElementById('liveSub');
   function connect() {
     ws = new WebSocket(wsUrl);
-    ws.onopen = function () { statusEl.textContent = 'Connecté'; statusEl.style.color = '#7d7'; };
-    ws.onclose = function () { statusEl.textContent = 'Déconnecté — reconnexion…'; statusEl.style.color = '#d77'; setTimeout(connect, 1000); };
+    ws.onopen = function () { live.classList.remove('off'); lt.textContent = 'En direct · tu as le contrôle'; ls.textContent = 'Contrôle de l’Edge 2'; };
+    ws.onclose = function () { live.classList.add('off'); lt.textContent = 'Déconnecté'; ls.textContent = 'Reconnexion…'; setTimeout(connect, 1000); };
     ws.onerror = function () { ws.close(); };
   }
   connect();
-
   function send(msg) { if (ws && ws.readyState === 1) ws.send(msg); }
 
-  var m1 = document.getElementById('m1'), m2 = document.getElementById('m2');
-  var v1 = document.getElementById('v1'), v2 = document.getElementById('v2');
-  var link = document.getElementById('link');
+  // --- Pad XY ---
+  var pad = document.getElementById('pad'), dot = document.getElementById('dot'),
+      vx = document.getElementById('vx'), hy = document.getElementById('hy'),
+      vBase = document.getElementById('vBase'), vTige = document.getElementById('vTige'),
+      linkBtn = document.getElementById('link');
+  var base = 0, tige = 0, linked = false, active = false;
+  function lvl(f) { return Math.round(f * 20); }
 
-  m1.oninput = function () {
-    v1.textContent = m1.value;
-    if (link.checked) { m2.value = m1.value; v2.textContent = m1.value; send('B:' + m1.value); }
-    else send('M1:' + m1.value);
-  };
-  m2.oninput = function () {
-    v2.textContent = m2.value;
-    if (link.checked) { m1.value = m2.value; v1.textContent = m2.value; send('B:' + m2.value); }
-    else send('M2:' + m2.value);
-  };
-  document.getElementById('stop').onclick = function () {
-    m1.value = 0; m2.value = 0; v1.textContent = '0'; v2.textContent = '0'; send('S');
-  };
+  function render() {
+    var bx = Math.round(base * 100), tx = Math.round(tige * 100);
+    vBase.textContent = bx; vTige.textContent = tx;
+    dot.style.left = bx + '%'; dot.style.top = (100 - tx) + '%';
+    vx.style.left = bx + '%'; hy.style.top = (100 - tx) + '%';
+  }
+  function apply(e) {
+    var r = pad.getBoundingClientRect();
+    var x = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
+    var y = Math.max(0, Math.min(1, 1 - (e.clientY - r.top) / r.height));
+    if (linked) { var m = (x + y) / 2; base = tige = m; send('B:' + lvl(m)); }
+    else { base = x; tige = y; send('M1:' + lvl(x)); send('M2:' + lvl(y)); }
+    render();
+  }
+  pad.addEventListener('pointerdown', function (e) { active = true; pad.setPointerCapture(e.pointerId); apply(e); });
+  pad.addEventListener('pointermove', function (e) { if (active) apply(e); });
+  pad.addEventListener('pointerup', function () { active = false; });
+  pad.addEventListener('pointercancel', function () { active = false; });
+
+  linkBtn.onclick = function () { linked = !linked; linkBtn.classList.toggle('on', linked); };
+
+  Array.prototype.forEach.call(document.querySelectorAll('[data-preset]'), function (b) {
+    b.onclick = function () { var f = (+b.dataset.preset) / 100; base = tige = f; send('B:' + lvl(f)); render(); };
+  });
+
+  document.getElementById('stop').onclick = function () { base = 0; tige = 0; send('S'); render(); };
+
+  render();
 </script>
 </body>
 </html>
