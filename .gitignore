@@ -1,0 +1,23 @@
+# Android / Gradle
+*.iml
+.gradle/
+local.properties
+.idea/
+build/
+captures/
+.externalNativeBuild/
+.cxx/
+*.apk
+*.aab
+*.ap_
+*.dex
+
+# Reverse-engineering artefacts (gros fichiers, non versionnés)
+*.apkm
+bugreport*.zip
+snoop_extract/
+*.log
+*.dec
+
+# OS
+.DS_Store
