@@ -1,0 +1,12 @@
+Pilote tes toys Lovense directement en Bluetooth LE — sans app Lovense, sans compte, sans cloud.
+
+Fonctionnalités :
+
+* Multi-toy : l'interface s'adapte aux actionneurs de chaque toy (vibration, double moteur, rotation, succion).
+* Pad XY une main pour les toys à deux moteurs ; presets d'intensité ; patterns ; un mode Tease aléatoire ; et un mode enregistrement (joue, puis sauve en pattern).
+* Contrôle à distance par lien, sur le même Wi-Fi ou par internet, protégé par un code PIN par session, une demande accepter/refuser et une expiration automatique.
+* Garde la connexion active en arrière-plan, plus une tuile STOP dans les réglages rapides.
+* Français / Anglais / Espagnol ; thèmes clair et sombre.
+* 100 % AOSP, sans Google Play Services.
+
+Le partage internet fait transiter le trafic par localhost.run (un tiers). Projet communautaire expérimental — non affilié à Lovense.
