@@ -40,7 +40,7 @@ class RemoteEngine private constructor(context: Context) {
     private val player = PatternPlayer(ble, scope)
     private val importer = LovenseImporter()
     private val server = RemoteServer(appContext.assets) { cmd -> applyRemote(cmd) }
-    private val tunnel = SshTunnel(scope)
+    private val tunnel = SshTunnel(appContext, scope)
 
     // --- État exposé -----------------------------------------------------
     val connectionState = ble.connectionState

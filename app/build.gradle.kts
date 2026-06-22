@@ -70,6 +70,7 @@ dependencies {
     implementation(libs.zxing.core)
     // Tunnel internet par SSH (localhost.run) — stack JVM → DNS Android OK (4G).
     implementation(libs.sshj)
+    implementation(libs.bcprov) // BouncyCastle complet (X25519 pour le KEX SSH)
     implementation(libs.slf4j.simple) // logs sshj → logcat (diagnostic)
 
     implementation(platform(libs.androidx.compose.bom))
