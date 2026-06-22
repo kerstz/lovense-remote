@@ -1,0 +1,23 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Pad sombre (dans la zone de sécurité 66dp centrée). -->
+    <path
+        android:fillColor="#0C0C12"
+        android:pathData="M40,26 H68 A14,14 0 0 1 82,40 V68 A14,14 0 0 1 68,82 H40 A14,14 0 0 1 26,68 V40 A14,14 0 0 1 40,26 Z" />
+    <!-- Halo du point. -->
+    <path
+        android:fillColor="#40FFFFFF"
+        android:pathData="M48,50 a15,15 0 1,0 30,0 a15,15 0 1,0 -30,0 Z" />
+    <!-- Axe BASE (vertical, violet) + axe TIGE (horizontal, rose). -->
+    <path android:strokeColor="#A98BFF" android:strokeWidth="2.5" android:strokeLineCap="round"
+        android:pathData="M63,33 V75" />
+    <path android:strokeColor="#FF8BA1" android:strokeWidth="2.5" android:strokeLineCap="round"
+        android:pathData="M33,50 H75" />
+    <!-- Point lumineux à l'intersection. -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M55,50 a8,8 0 1,0 16,0 a8,8 0 1,0 -16,0 Z" />
+</vector>

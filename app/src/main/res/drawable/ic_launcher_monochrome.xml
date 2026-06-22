@@ -1,0 +1,15 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Icône thématique (Android 13+) : le système applique sa propre teinte,
+         seule la forme (alpha) compte → crosshair + point. -->
+    <path android:strokeColor="#FFFFFF" android:strokeWidth="3" android:strokeLineCap="round"
+        android:pathData="M63,33 V75" />
+    <path android:strokeColor="#FFFFFF" android:strokeWidth="3" android:strokeLineCap="round"
+        android:pathData="M33,50 H75" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,50 a9,9 0 1,0 18,0 a9,9 0 1,0 -18,0 Z" />
+</vector>

@@ -120,10 +120,7 @@ fun ConnectionScreen(
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(11.dp)) {
-            Box(
-                Modifier.size(30.dp).clip(RoundedCornerShape(9.dp))
-                    .background(Brush.linearGradient(listOf(c.gradStart, c.gradEnd))),
-            )
+            BrandMark(size = 30.dp)
             Text(stringResource(R.string.conn_eyebrow), color = c.muted, fontWeight = FontWeight.Bold, fontSize = 12.sp, letterSpacing = 3.sp)
         }
 
