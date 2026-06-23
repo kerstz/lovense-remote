@@ -6,6 +6,7 @@ import io.ktor.server.application.call
 import io.ktor.server.application.install
 import io.ktor.server.cio.CIO
 import io.ktor.server.engine.embeddedServer
+import io.ktor.server.response.respondBytes
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
@@ -75,6 +76,13 @@ class RemoteServer(
             routing {
                 get("/") { call.respondText(servedHtml(), ContentType.Text.Html) }
                 get("/s/{id}") { call.respondText(servedHtml(), ContentType.Text.Html) }
+                // Fonts self-hébergées (pas de CDN externe) : servies depuis les assets.
+                get("/font/{name}") {
+                    val name = call.parameters["name"]
+                    if (name !in FONT_ASSETS) { call.respondText("", status = io.ktor.http.HttpStatusCode.NotFound); return@get }
+                    val bytes = assets.open("fonts/$name").use { it.readBytes() }
+                    call.respondBytes(bytes, ContentType("font", "ttf"))
+                }
                 webSocket("/ws") {
                     // Gate « lien seul » : on rejette les sessions périmées.
                     if (call.request.queryParameters["id"] != sessionId) {
@@ -120,5 +128,10 @@ class RemoteServer(
     private fun randomId(): String {
         val alphabet = "abcdefghijklmnopqrstuvwxyz0123456789"
         return (1..8).map { alphabet[Random.nextInt(alphabet.length)] }.joinToString("")
+    }
+
+    private companion object {
+        /** Fonts servables (anti-traversée de chemin). */
+        val FONT_ASSETS = setOf("space_grotesk.ttf", "jetbrains_mono.ttf")
     }
 }
