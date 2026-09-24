@@ -1,5 +1,7 @@
 package com.edge2.remote.ble
 
+import com.edge2.remote.ble.proto.Hint
+
 /** BLE scan state (add-a-toy screen). */
 sealed interface ScanState {
     data object Idle : ScanState
@@ -30,6 +32,8 @@ data class ToyStatus(
     val link: LinkState,
     val battery: Int? = null,
     val levels: List<Int> = List(toy.actuators.size) { 0 },
+    /** Something the user must do for the connection to complete (e.g. press the power button). */
+    val hint: Hint? = null,
 ) {
     val isReady: Boolean get() = link is LinkState.Connected
     val displayName: String get() = toy.displayName
@@ -43,6 +47,11 @@ data class DiscoveredToy(
     val address: String,
     val bleName: String,
     val rssi: Int,
-    val brand: Brand,
+    val protocolId: String,
+    val brand: String,
     val displayName: String,
-)
+    /** false = recognised but its protocol isn't implemented yet (shown greyed out). */
+    val supported: Boolean,
+) {
+    val experimental: Boolean get() = protocolId != "lovense"
+}
