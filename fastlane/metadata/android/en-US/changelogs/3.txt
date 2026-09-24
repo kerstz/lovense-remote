@@ -1,0 +1,5 @@
+* 800+ toys from 120+ brands: Satisfyer, We-Vibe, Svakom, Lelo, Kiiroo, Magic Motion, JoyHub, Hismith, Vorze… (experimental, Lovense tested)
+* Controls adapt to each toy: rotation, thrust, suction, heating, lights, lube pump, strokers, battery
+* Several toys at once (up to 5), mixed brands
+* Safer link sharing: approve each controller, 5 wrong PINs stop the share
+* Updated dependencies (security fixes)
