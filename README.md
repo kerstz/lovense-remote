@@ -4,42 +4,52 @@
 
 # Lovense Remote
 
-**Drive your Lovense toys over direct Bluetooth — no app, no account, no cloud.**
+**Drive your toys over direct Bluetooth — no app, no account, no cloud.**
 
-Open-source Android remote. Multiple toys supported, the UI adapts to each one.
+Open-source Android remote. Several toys at once, several brands, the UI adapts to each one.
+
+**English** · [Français](README.fr.md)
 
 <p>
   <img src="https://img.shields.io/badge/License-GPLv3-8B6BFF?style=flat-square" alt="GPLv3">
   <img src="https://img.shields.io/badge/Android-8.0%2B-FF5C7A?style=flat-square" alt="Android 8+">
   <img src="https://img.shields.io/badge/100%25-AOSP%20·%20no%20Google-46E0A0?style=flat-square" alt="AOSP">
-  <img src="https://img.shields.io/badge/i18n-FR%20·%20EN%20·%20ES-A98BFF?style=flat-square" alt="i18n">
+  <img src="https://img.shields.io/badge/i18n-EN%20·%20FR%20·%20ES-A98BFF?style=flat-square" alt="i18n">
   <img src="https://img.shields.io/github/v/release/kerstz/lovense-remote?style=flat-square&color=FF8BA1" alt="Release">
 </p>
 
-<img src="docs/screenshots/01-connexion.png" width="232">&nbsp;
-<img src="docs/screenshots/02-principal.png" width="232">&nbsp;
-<img src="docs/screenshots/03-partage.png" width="232">
+<img src="docs/screenshots/01-connection.png" width="232">&nbsp;
+<img src="docs/screenshots/02-main.png" width="232">&nbsp;
+<img src="docs/screenshots/03-sharing.png" width="232">
 
 </div>
 
 > ⚠️ Experimental community project. **Not affiliated with Lovense.**
+>
+> 🤖 **Vibe coded** — this app was largely written with an AI coding assistant,
+> then reviewed and tested by hand. Read the code (and the Security section)
+> before trusting it with anything that matters.
 
 ---
 
 ## ✨ Features
 
-- **🔵 Direct BLE** — scan, connect and drive the toy straight from your phone.
-- **🧸 Multi-toy** — Lush, Hush, Edge, Nora, Max, Domi, Ferri, Gemini… the UI
+- **🔵 Direct BLE** — scan, connect and drive toys straight from your phone.
+- **🧸 Several toys at once** — connect up to 5 toys, drive each one or **all**
+  together; patterns, presets and remote control follow the selected target.
+- **🏷 Multi-brand** — Lovense (Lush, Hush, Edge, Nora, Max, Domi, Ferri,
+  Gemini…) plus **experimental** We-Vibe, Vorze and Magic Motion support (see
+  [`docs/research/other-brands.md`](docs/research/other-brands.md)). The UI
   adapts to each toy's actuators (vibration, dual motor, rotation, suction).
 - **👍 One-hand XY pad** — one thumb drives both motors of two-motor toys.
 - **🎛 Patterns** — built-ins, Lovense `.ta` import, a random **Tease** mode, and
   a **record** mode (perform → saved pattern).
-- **🔗 Remote by link** — let a partner control the toy from the **same Wi-Fi** or
-  **over the internet / 4G**, gated by a **per-session PIN**, an accept/refuse
-  prompt and auto-expiry.
+- **🔗 Remote by link** — let a partner control your toys from the **same Wi-Fi** or
+  **over the internet / 4G**, gated by a secret link, a **6-digit PIN**, your
+  approval **per controller**, and auto-expiry (see Security below).
 - **🌙 Background** — keeps the link alive when the app is closed, plus a
   quick-settings **STOP** tile.
-- **🌍 i18n & themes** — French / English / Spanish, dark & light.
+- **🌍 i18n & themes** — English (default) / French / Spanish, dark & light.
 - **🟢 100 % AOSP** — no Google Play Services (GrapheneOS-friendly).
 
 ## 📲 Install
@@ -61,8 +71,10 @@ Kotlin + Jetpack Compose · minSdk 26 · target/compile SDK 35.
 <details>
 <summary>🧩 Architecture</summary>
 
-- `ble/` — Lovense BLE layer: scan, GATT, per-actuator commands, toy registry
-  (see [`docs/research/lovense-ble-protocol.md`](docs/research/lovense-ble-protocol.md)).
+- `ble/` — multi-toy BLE layer: scan (`ToyManager`), one `ToyConnection` per
+  toy (GATT, coalesced writes, reconnection), and one `ToyDriver` per brand
+  (see [`docs/research/lovense-ble-protocol.md`](docs/research/lovense-ble-protocol.md)
+  and [`docs/research/other-brands.md`](docs/research/other-brands.md)).
 - `RemoteEngine` — process-scoped core (BLE + server + tunnel + state) so control
   survives the Activity / the app being closed.
 - `remote/` — embedded HTTP+WS server, web control page
@@ -71,11 +83,31 @@ Kotlin + Jetpack Compose · minSdk 26 · target/compile SDK 35.
 
 </details>
 
-## 🔒 Privacy
+## 🔒 Security & privacy
 
-LAN sharing stays on your network. Internet sharing routes traffic through
-**localhost.run** (a third party); the control link is gated by a per-session
-PIN + accept/refuse, and the session auto-expires.
+Remote control is layered so that knowing the link is never enough:
+
+- **Secret link** — 128-bit random session id (SecureRandom), new on every share;
+  old links die immediately.
+- **6-digit PIN**, sent inside the WebSocket (never in a URL, so never in relay
+  logs), compared in constant time. **5 wrong codes burn the session.**
+- **Your approval, per controller** — an authenticated controller can't drive
+  anything until you accept *that* controller; you can refuse/kick one without
+  stopping the share. Accepted controllers get a resume token for network blips.
+- **Web hardening** — strict CSP (script pinned by hash), no referrer,
+  anti-framing, `Origin` check against cross-site WebSocket hijacking, 256-byte
+  frames, rate limiting, max 3 sockets, 10 s to authenticate.
+- **Minimal network surface** — listens only on 127.0.0.1 (for the tunnel) and
+  the Wi-Fi IP, never on cellular/VPN interfaces. Auto-expiry after 30 min.
+- **Relay host key pinned** (trust on first use) — an attacker can no longer
+  impersonate localhost.run; a changed key blocks the internet link.
+- **No backups** of app data (tunnel key, settings); deep links are validated
+  and need your confirmation.
+
+Limits you should know: LAN sharing is plain HTTP (use a trusted Wi-Fi only).
+Internet sharing goes through **localhost.run** (a third party) which terminates
+TLS and can see the control traffic — the PIN + your approval remain the gate.
+Non-Lovense brands are experimental (community protocol data, untested here).
 
 ## ⚖️ License
 

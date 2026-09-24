@@ -22,7 +22,7 @@ import androidx.compose.ui.unit.sp
 import com.edge2.remote.R
 import com.edge2.remote.ui.theme.Edge2
 
-/** Réglages : langue et thème. Toute sélection applique + recrée l'écran. */
+/** Settings: language and theme. Any selection is applied and recreates the screen. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun SettingsDialog(
@@ -42,8 +42,8 @@ fun SettingsDialog(
                 Text(stringResource(R.string.settings_language), color = c.ink, fontWeight = FontWeight.Bold)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     OptChip(stringResource(R.string.opt_system), lang == "system") { onLang("system") }
-                    OptChip("Français", lang == "fr") { onLang("fr") }
                     OptChip("English", lang == "en") { onLang("en") }
+                    OptChip("Français", lang == "fr") { onLang("fr") }
                     OptChip("Español", lang == "es") { onLang("es") }
                 }
                 Text(stringResource(R.string.settings_theme), color = c.ink, fontWeight = FontWeight.Bold)

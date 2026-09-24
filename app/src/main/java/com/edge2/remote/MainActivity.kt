@@ -22,8 +22,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.edge2.remote.ble.ConnectionState
 import com.edge2.remote.prefs.Settings
+import com.edge2.remote.remote.RemoteController
 import com.edge2.remote.ui.ConnectionScreen
 import com.edge2.remote.ui.ControllerScreen
 import com.edge2.remote.ui.RemoteScreen
@@ -33,7 +33,7 @@ import com.edge2.remote.ui.theme.Edge2Theme
 
 class MainActivity : ComponentActivity() {
 
-    // Applique la langue choisie (system / fr / en / es) aux ressources.
+    // Applies the chosen language (system / fr / en / es) to resources.
     override fun attachBaseContext(newBase: Context) {
         super.attachBaseContext(Settings.wrapLocale(newBase))
     }
@@ -41,10 +41,15 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        // Deep link contrôleur : edge2remote://control?ws=<url ws du host distant>
+        // Controller deep link: edge2remote://control?ws=<ws url>&pin=<code>.
+        // Any website can fire this link → strictly validated URL, then explicit
+        // user confirmation before any connection.
         val data = intent?.data
-        val controllerWsUrl =
-            if (data?.scheme == "edge2remote") data.getQueryParameter("ws") else null
+        val deepWs = if (data?.scheme == "edge2remote" && data.host == "control") {
+            RemoteController.validateWsUrl(data.getQueryParameter("ws"))
+        } else null
+        val deepPin = if (deepWs != null) RemoteController.validatePin(data?.getQueryParameter("pin")) else null
+        val controllerWsUrl = if (deepPin != null) deepWs else null
 
         setContent {
             val dark = when (Settings.theme(this)) {
@@ -62,7 +67,7 @@ class MainActivity : ComponentActivity() {
                         .safeDrawingPadding(),
                 ) {
                     if (controllerWsUrl != null) {
-                        ControllerScreen(wsUrl = controllerWsUrl)
+                        ControllerScreen(wsUrl = controllerWsUrl, pin = deepPin!!, onExit = { finish() })
                     } else {
                         App(onSettings = { settingsOpen = true })
                     }
@@ -84,11 +89,14 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun App(onSettings: () -> Unit) {
     val vm: RemoteViewModel = viewModel()
-    val state by vm.connectionState.collectAsStateWithLifecycle()
+    val toys by vm.toys.collectAsStateWithLifecycle()
+    val scanState by vm.scanState.collectAsStateWithLifecycle()
     val discovered by vm.discovered.collectAsStateWithLifecycle()
+    // Add-a-toy screen opened on top while toys are already managed.
+    var adding by remember { mutableStateOf(false) }
 
-    // Demande les permissions BLE (+ notifications) puis lance le scan. Le refus
-    // de POST_NOTIFICATIONS ne bloque PAS le scan (la notif est optionnelle).
+    // Requests BLE permissions (+ notifications), then starts scanning. Denying
+    // POST_NOTIFICATIONS does NOT block scanning (the notification is optional).
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions(),
     ) { result ->
@@ -111,14 +119,16 @@ private fun App(onSettings: () -> Unit) {
         permissionLauncher.launch(perms)
     }
 
-    if (state is ConnectionState.Connected) {
-        RemoteScreen(vm = vm, onDisconnect = { vm.disconnect() }, onSettings = onSettings)
+    if (toys.isNotEmpty() && !adding) {
+        RemoteScreen(vm = vm, onAddToy = { adding = true }, onSettings = onSettings)
     } else {
         ConnectionScreen(
-            state = state,
+            scanState = scanState,
             discovered = discovered,
+            connectedCount = toys.size,
             onScan = ::requestScan,
-            onSelect = { vm.connectTo(it) },
+            onSelect = { vm.connectTo(it); adding = false },
+            onBack = if (toys.isNotEmpty()) ({ vm.stopScan(); adding = false }) else null,
             onSettings = onSettings,
         )
     }

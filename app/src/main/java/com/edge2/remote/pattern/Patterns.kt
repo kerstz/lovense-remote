@@ -2,7 +2,7 @@ package com.edge2.remote.pattern
 
 import kotlinx.serialization.json.Json
 
-/** Sérialisation JSON des patterns (partage / import / export). */
+/** JSON (de)serialization of patterns (share / import / export). */
 object PatternIO {
     private val json = Json {
         prettyPrint = true
@@ -11,17 +11,17 @@ object PatternIO {
 
     fun encode(pattern: Pattern): String = json.encodeToString(Pattern.serializer(), pattern)
 
-    /** Renvoie null si le JSON est invalide (au lieu de jeter). */
+    /** Returns null if the JSON is invalid (instead of throwing). */
     fun decodeOrNull(raw: String): Pattern? =
         runCatching { json.decodeFromString(Pattern.serializer(), raw) }.getOrNull()
 }
 
-/** Quelques patterns intégrés en presets. */
+/** A few built-in preset patterns. */
 object BuiltinPatterns {
 
-    /** Va-et-vient entre les deux moteurs. */
+    /** Back and forth between the two motors. */
     val wave = Pattern(
-        name = "Vague",
+        name = "Wave",
         steps = listOf(
             PatternStep(m1 = 20, m2 = 0, durationMs = 450),
             PatternStep(m1 = 10, m2 = 10, durationMs = 250),
@@ -30,7 +30,7 @@ object BuiltinPatterns {
         ),
     )
 
-    /** Pulsations courtes des deux moteurs. */
+    /** Short pulses on both motors. */
     val pulse = Pattern(
         name = "Pulse",
         steps = listOf(
@@ -39,9 +39,9 @@ object BuiltinPatterns {
         ),
     )
 
-    /** Montée progressive puis coupure. */
+    /** Progressive ramp-up, then cut. */
     val ramp = Pattern(
-        name = "Montée",
+        name = "Ramp",
         steps = (0..20 step 2).map { lvl ->
             PatternStep(m1 = lvl, m2 = lvl, durationMs = 180)
         } + PatternStep(m1 = 0, m2 = 0, durationMs = 300),

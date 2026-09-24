@@ -1,44 +1,48 @@
 package com.edge2.remote.ble
 
-/**
- * États exposés à l'UI via StateFlow. Volontairement simple et exhaustif
- * pour que Compose puisse couvrir chaque cas (loading / connected / error).
- */
-sealed interface ConnectionState {
-    /** Rien en cours. État initial et après [Edge2BleManager.disconnect]. */
-    data object Disconnected : ConnectionState
+/** BLE scan state (add-a-toy screen). */
+sealed interface ScanState {
+    data object Idle : ScanState
+    data object Scanning : ScanState
+    /** Failure (missing permission, Bluetooth off, scanner unavailable…). */
+    data class Error(val reason: String) : ScanState
+}
 
-    /** Scan BLE en cours, à la recherche d'un toy `LVS-…`. */
-    data object Scanning : ConnectionState
-
-    /** Toy trouvé, connexion GATT + découverte services + handshake en cours. */
-    data object Connecting : ConnectionState
-
-    /**
-     * Prêt à piloter. [toy] = modèle détecté (→ actionneurs + UI adaptée),
-     * [battery] = % batterie (null si inconnu).
-     */
-    data class Connected(
-        val toy: ToyType,
-        val battery: Int? = null,
-    ) : ConnectionState {
-        val deviceName: String get() = toy.displayName
-    }
-
-    /** Échec (timeout scan, GATT error, permission manquante…). */
-    data class Error(val reason: String) : ConnectionState
+/** BLE link state of ONE toy. */
+sealed interface LinkState {
+    /** GATT connection + service discovery + handshake in progress. */
+    data object Connecting : LinkState
+    /** Ready to drive. */
+    data object Connected : LinkState
+    /** Link lost → automatic reconnection in progress. */
+    data object Reconnecting : LinkState
+    /** Permanent failure (service not found, GATT error…). */
+    data class Error(val reason: String) : LinkState
 }
 
 /**
- * Un toy Lovense repéré pendant le scan (avant connexion). La liste de ces
- * objets alimente la sélection sur l'écran de connexion : on n'affiche que les
- * jouets réellement visibles à proximité.
+ * Snapshot of a managed toy (connected or connecting), exposed to the UI, to
+ * sharing and to the notification. [levels] = level actually sent to each actuator.
+ */
+data class ToyStatus(
+    val address: String,
+    val toy: ToyType,
+    val link: LinkState,
+    val battery: Int? = null,
+    val levels: List<Int> = List(toy.actuators.size) { 0 },
+) {
+    val isReady: Boolean get() = link is LinkState.Connected
+    val displayName: String get() = toy.displayName
+}
+
+/**
+ * A toy seen during the scan (before connecting). The list feeds the add-a-toy
+ * screen: only toys that are actually visible nearby are shown.
  */
 data class DiscoveredToy(
     val address: String,
     val bleName: String,
     val rssi: Int,
-) {
-    /** Nom lisible dérivé du nom BLE `LVS-<modèle>-<id>` (ex. "Edge 2"). */
-    val displayName: String get() = LovenseProtocol.prettyModelName(bleName)
-}
+    val brand: Brand,
+    val displayName: String,
+)

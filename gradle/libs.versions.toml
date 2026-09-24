@@ -1,19 +1,21 @@
 [versions]
 agp = "8.7.3"
-kotlin = "2.0.21"
+kotlin = "2.3.21"
 coreKtx = "1.15.0"
 lifecycle = "2.8.7"
 activityCompose = "1.9.3"
 composeBom = "2024.12.01"
-coroutines = "1.9.0"
-serializationJson = "1.7.3"
-ktor = "2.3.13"
-zxing = "3.5.3"
-sshj = "0.38.0"
-slf4jSimple = "2.0.16"
-bouncycastle = "1.78.1"
+coroutines = "1.11.0"
+serializationJson = "1.10.0"
+ktor = "3.6.0"
+zxing = "3.5.4"
+sshj = "0.41.1"
+slf4jSimple = "2.0.17"
+bouncycastle = "1.86"
+junit = "4.13.2"
 
 [libraries]
+junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "lifecycle" }
 androidx-lifecycle-runtime-compose = { group = "androidx.lifecycle", name = "lifecycle-runtime-compose", version.ref = "lifecycle" }
@@ -28,6 +30,8 @@ zxing-core = { group = "com.google.zxing", name = "core", version.ref = "zxing" 
 sshj = { group = "com.hierynomus", name = "sshj", version.ref = "sshj" }
 slf4j-simple = { group = "org.slf4j", name = "slf4j-simple", version.ref = "slf4jSimple" }
 bcprov = { group = "org.bouncycastle", name = "bcprov-jdk18on", version.ref = "bouncycastle" }
+bcpkix = { group = "org.bouncycastle", name = "bcpkix-jdk18on", version.ref = "bouncycastle" }
+bcutil = { group = "org.bouncycastle", name = "bcutil-jdk18on", version.ref = "bouncycastle" }
 androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activityCompose" }
 androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
 androidx-ui = { group = "androidx.compose.ui", name = "ui" }

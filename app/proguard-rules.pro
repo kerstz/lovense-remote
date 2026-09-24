@@ -1,1 +1,1 @@
-# Règles ProGuard par défaut. Rien de spécifique pour l'instant.
+# Default ProGuard rules. Nothing specific for now.

@@ -1,26 +1,26 @@
-# Protocole BLE Lovense — référence multi-toy
+# Lovense BLE protocol — multi-toy reference
 
-Recherche croisée (config Buttplug `lovense.yml` + STPIHKAL + `lovesense-rs` + doc
-Lovense Standard Solutions + gist communautaire). Sert de base au support multi-toy.
+Cross-checked research (Buttplug `lovense.yml` config + STPIHKAL + `lovesense-rs` +
+Lovense Standard Solutions docs + a community gist). Basis for multi-toy support.
 
 ## Identification
 
-- **Nom BLE** : préfixe `LVS-*` (parfois `LOVE-*`). Deux schémas : ancien
-  `LVS-<code><nnn>` (1 lettre = type), moderne `LVS-<ProductName><fw>` (2 derniers
-  chiffres = firmware). **Ne pas se fier au nom seul.**
-- **Manufacturer data** : company id `620`, octets `[255, 33]` (filtre secondaire).
-- **Fiable** : après connexion, envoyer `DeviceType;` → réponse `<code>:<fw>:<MAC>;`
-  (ex. `C:11:0082059AD3BD;`). La/les lettre(s) de tête = code type.
-- **Service UUID** : **varie selon le modèle** (Gen1 `fff0`, Gen2 Nordic UART
-  `6e400001…`, Gen3 `XY30…` où les 2 premiers octets hex encodent le modèle, ex.
-  `50300001…` = `P0` = Edge). Dans une paire, offset `…0002…` = TX (write),
-  `…0003…` = RX (notify). → **ne pas coder l'UUID en dur** ; détecter TX/RX par
-  propriétés GATT (déjà fait dans `LovenseProtocol.findEndpoints`).
+- **BLE name**: `LVS-*` prefix (sometimes `LOVE-*`). Two schemes: legacy
+  `LVS-<code><nnn>` (1 letter = type), modern `LVS-<ProductName><fw>` (last 2
+  digits = firmware). **Do not rely on the name alone.**
+- **Manufacturer data**: company id `620`, bytes `[255, 33]` (secondary filter).
+- **Reliable**: after connecting, send `DeviceType;` → reply `<code>:<fw>:<MAC>;`
+  (e.g. `C:11:0082059AD3BD;`). The leading letter(s) = type code.
+- **Service UUID**: **varies per model** (Gen1 `fff0`, Gen2 Nordic UART
+  `6e400001…`, Gen3 `XY30…` where the first 2 hex bytes encode the model, e.g.
+  `50300001…` = `P0` = Edge). Within a pair, offset `…0002…` = TX (write),
+  `…0003…` = RX (notify). → **do not hard-code the UUID**; detect TX/RX by GATT
+  properties (done in `LovenseProtocol.findEndpoints`).
 
-## Codes type (DeviceType / UUID)
+## Type codes (DeviceType / UUID)
 
-| Code | Modèle | Code | Modèle | Code | Modèle |
-|------|--------|------|--------|------|--------|
+| Code | Model | Code | Model | Code | Model |
+|------|-------|------|-------|------|-------|
 | A, C | Nora | B | Max | P (PA/PB) | Edge |
 | S | Lush | Z | Hush | W | Domi |
 | L | Ambi | X | Ferri | R | Diamo |
@@ -28,33 +28,33 @@ Lovense Standard Solutions + gist communautaire). Sert de base au support multi-
 | EA | Gravity | EB | Hyphy | ED/EZ | Gush |
 | H | Solace | BA | Solace Pro | U | Lapis |
 
-## Commandes (ASCII, terminées par `;`, niveaux 0..20 sauf indication)
+## Commands (ASCII, `;`-terminated, levels 0..20 unless stated)
 
-| Commande | Syntaxe | Plage | Confiance |
-|----------|---------|-------|-----------|
-| Vibration (mono) | `Vibrate:N;` | 0..20 | Haute |
-| Vibration moteur N | `Vibrate1:N;` / `Vibrate2:N;` | 0..20 | Haute (Edge 2 confirmé) |
-| Rotation | `Rotate:N;` (+ `RotateChange;` inverse le sens) | 0..20 | Haute |
-| Air / succion (Max) | `Air:Level:N;` (+ `Air:In:`/`Air:Out:`) | **0..5 vs 0..3 disputé** | Moyenne |
-| Batterie | `Battery;` → `85;` | 0..100 | Haute |
-| Type | `DeviceType;` → `code:fw:MAC;` | — | Haute |
-| Éteindre | `PowerOff;` → `OK;` | — | Haute |
+| Command | Syntax | Range | Confidence |
+|---------|--------|-------|------------|
+| Vibration (single) | `Vibrate:N;` | 0..20 | High |
+| Vibration motor N | `Vibrate1:N;` / `Vibrate2:N;` | 0..20 | High (Edge 2 confirmed) |
+| Rotation | `Rotate:N;` (+ `RotateChange;` reverses direction) | 0..20 | High |
+| Air / suction (Max) | `Air:Level:N;` (+ `Air:In:`/`Air:Out:`) | **0..5 vs 0..3 disputed** | Medium |
+| Battery | `Battery;` → `85;` | 0..100 | High |
+| Type | `DeviceType;` → `code:fw:MAC;` | — | High |
+| Power off | `PowerOff;` → `OK;` | — | High |
 
-- **Pas de `Stop;`** : pour tout arrêter, envoyer `0` à chaque actionneur.
-- **Stroker (Solace / Gravity thrust)** : ASCII brut non documenté publiquement de
-  façon fiable (Buttplug l'abstrait en Oscillate + position/durée). **Confiance
-  faible** → non supporté tel quel ; à confirmer en sniffant l'appareil.
+- **No `Stop;`**: to stop everything, send `0` to each actuator.
+- **Stroker (Solace / Gravity thrust)**: the raw ASCII isn't reliably documented
+  publicly (Buttplug abstracts it as Oscillate + position/duration). **Low
+  confidence** → not supported as is; to be confirmed by sniffing the device.
 
-## Archétypes UI (5)
+## UI archetypes (5)
 
-1. 1 vibreur (Lush, Hush, Domi, Ferri, Ambi, Diamo, Calor, Osci, Gush…) → 1 slider.
-2. 2 vibreurs (Edge 2, Gemini, Hyphy) → **pad XY**.
-3. vibreur + rotation (Nora) → slider vibration + slider rotation + bouton sens.
-4. vibreur + air (Max 2) → slider vibration + slider succion.
-5. stroker (Solace/Gravity) → slider oscillation (+ profondeur Pro). *Non implémenté
-   (commande incertaine).*
+1. 1 vibrator (Lush, Hush, Domi, Ferri, Ambi, Diamo, Calor, Osci, Gush…) → 1 slider.
+2. 2 vibrators (Edge 2, Gemini, Hyphy) → **XY pad**.
+3. vibrator + rotation (Nora) → vibration slider + rotation slider + direction button.
+4. vibrator + air (Max 2) → vibration slider + suction slider.
+5. stroker (Solace/Gravity) → oscillation slider (+ Pro depth). *Not implemented
+   (uncertain command).*
 
-## À confirmer sur matériel
+## To confirm on hardware
 - `Air:Level` max (3 vs 5).
-- Commande ASCII réelle du thrust/stroker (Solace, Gravity).
-- Nom exact `Battery;` vs `BatteryLevel;` (consensus `Battery;`).
+- Actual ASCII command for thrust/stroker (Solace, Gravity).
+- Exact name `Battery;` vs `BatteryLevel;` (consensus: `Battery;`).

@@ -12,7 +12,7 @@ captures/
 *.ap_
 *.dex
 
-# Reverse-engineering artefacts (gros fichiers, non versionnés)
+# Reverse-engineering artefacts (large files, not versioned)
 *.apkm
 bugreport*.zip
 snoop_extract/
@@ -26,6 +26,6 @@ apk_extract/
 # Playwright MCP artefacts
 .playwright-mcp/
 
-# Signing keystores (NE JAMAIS commiter)
+# Signing keystores (NEVER commit)
 *.jks
 *.keystore

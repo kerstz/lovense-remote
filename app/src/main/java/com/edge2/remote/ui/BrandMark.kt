@@ -16,22 +16,22 @@ import androidx.compose.ui.unit.dp
 import com.edge2.remote.ui.theme.Edge2
 
 /**
- * Marque de l'app : miniature de la signature produit — pad sombre dans le
- * dégradé violet→rose, crosshair (axe base violet / axe tige rose) et point
- * lumineux à l'intersection. Même langage que l'icône de lancement.
+ * App mark: a miniature of the product signature — a dark pad inside the
+ * violet→pink gradient, a crosshair (violet base axis / pink shaft axis) and a
+ * glowing dot at the intersection. Same visual language as the launcher icon.
  */
 @Composable
 fun BrandMark(size: Dp = 30.dp, modifier: Modifier = Modifier) {
     val c = Edge2.colors
     Canvas(modifier.size(size)) {
         val s = this.size.minDimension
-        // Tuile dégradée.
+        // Gradient tile.
         drawRoundRect(
             brush = Brush.linearGradient(listOf(c.gradStart, c.gradEnd)),
             size = Size(s, s),
             cornerRadius = CornerRadius(s * 0.3f, s * 0.3f),
         )
-        // Pad sombre.
+        // Dark pad.
         val pad = s * 0.18f
         drawRoundRect(
             color = Color(0xFF0C0C12),
@@ -39,11 +39,11 @@ fun BrandMark(size: Dp = 30.dp, modifier: Modifier = Modifier) {
             size = Size(s - pad * 2, s - pad * 2),
             cornerRadius = CornerRadius(s * 0.16f, s * 0.16f),
         )
-        // Crosshair + point (position décalée, comme un vrai pad).
+        // Crosshair + dot (off-centre, like a real pad).
         val cx = s * 0.6f
         val cy = s * 0.5f
         drawLine(c.base.copy(alpha = .9f), Offset(cx, pad + s * .06f), Offset(cx, s - pad - s * .06f), s * 0.04f, StrokeCap.Round)
-        drawLine(c.tige.copy(alpha = .9f), Offset(pad + s * .06f, cy), Offset(s - pad - s * .06f, cy), s * 0.04f, StrokeCap.Round)
+        drawLine(c.shaft.copy(alpha = .9f), Offset(pad + s * .06f, cy), Offset(s - pad - s * .06f, cy), s * 0.04f, StrokeCap.Round)
         drawCircle(
             Brush.radialGradient(listOf(Color.White.copy(alpha = .5f), Color.Transparent), center = Offset(cx, cy), radius = s * 0.2f),
             radius = s * 0.2f, center = Offset(cx, cy),

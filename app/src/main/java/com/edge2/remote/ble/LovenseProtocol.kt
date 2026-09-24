@@ -6,29 +6,30 @@ import java.util.UUID
 import kotlin.math.roundToInt
 
 /**
- * Protocole BLE Lovense — confirmé pour l'Edge 2 (cf. PROTOCOL.md).
+ * Lovense BLE protocol — confirmed on the Edge 2 (see PROTOCOL.md). Used by
+ * [LovenseDriver].
  *
- * Résumé :
- *  - Commandes = chaînes ASCII terminées par `;`, écrites en WriteNoResponse
- *    sur la caractéristique TX (UUID se terminant par `…0002`).
- *  - Réponses = notifications ASCII sur la caractéristique RX (`…0003`).
- *  - Deux moteurs : `Vibrate1:n;` / `Vibrate2:n;`, n ∈ [0..20].
- *  - Handshake : `DeviceType;` → réponse `P:02:MAC;` (P = Edge). Pas d'auth
- *    requise pour piloter.
+ * Summary:
+ *  - Commands = ASCII strings terminated by `;`, written with WriteNoResponse
+ *    to the TX characteristic (UUID ending in `…0002`).
+ *  - Replies = ASCII notifications on the RX characteristic (`…0003`).
+ *  - Two motors: `Vibrate1:n;` / `Vibrate2:n;`, n ∈ [0..20].
+ *  - Handshake: `DeviceType;` → reply `P:02:MAC;` (P = Edge). No auth is
+ *    required to drive the toy.
  *
- * On ne code pas en dur le service UUID exact (il varie selon la révision
- * firmware : `…0023…` vs `…0024…`). À la place on détecte TX/RX par leurs
- * propriétés GATT à la découverte (voir [findEndpoints]).
+ * The exact service UUID is not hard-coded (it varies with the firmware
+ * revision: `…0023…` vs `…0024…`). Instead TX/RX are detected by their GATT
+ * properties at discovery time (see [findEndpoints]).
  */
 object LovenseProtocol {
 
-    /** Intensité maximale acceptée par le toy. */
+    /** Maximum intensity accepted by the toy. */
     const val INTENSITY_MAX = 20
 
-    /** Préfixe du nom BLE annoncé par tous les toys Lovense récents. */
+    /** BLE name prefix advertised by all recent Lovense toys. */
     const val BLE_NAME_PREFIX = "LVS-"
 
-    /** "LVS-Edge2-3A9F" → "Edge 2". Espace inséré entre lettres et chiffres. */
+    /** "LVS-Edge2-3A9F" → "Edge 2". A space is inserted between letters and digits. */
     fun prettyModelName(bleName: String): String {
         val token = bleName.removePrefix(BLE_NAME_PREFIX).substringBefore('-')
         if (token.isBlank()) return "Lovense"
@@ -38,52 +39,57 @@ object LovenseProtocol {
     /** CCCD standard (Client Characteristic Configuration Descriptor). */
     val CCCD_UUID: UUID = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
 
-    // --- Construction des commandes (bytes ASCII) -------------------------
+    // --- Command building (ASCII bytes) ------------------------------------
 
-    /** `DeviceType;` — identifie le modèle (handshake). */
+    /** `DeviceType;` — identifies the model (handshake). */
     fun deviceType(): ByteArray = "DeviceType;".toByteArray(Charsets.US_ASCII)
 
-    /** `Battery;` — interroge le niveau de batterie. */
+    /** `Battery;` — queries the battery level. */
     fun battery(): ByteArray = "Battery;".toByteArray(Charsets.US_ASCII)
 
-    /** `PowerOff;` — éteint le toy. */
+    /** `PowerOff;` — turns the toy off. */
     fun powerOff(): ByteArray = "PowerOff;".toByteArray(Charsets.US_ASCII)
 
-    /** Commande d'un actionneur quelconque, bornée à sa plage propre. */
-    fun actuatorCommand(kind: ActuatorKind, level: Int): ByteArray {
-        val n = level.coerceIn(0, kind.max)
-        val s = when (kind) {
-            ActuatorKind.VIBRATE -> "Vibrate:$n;"
-            ActuatorKind.VIBRATE1 -> "Vibrate1:$n;"
-            ActuatorKind.VIBRATE2 -> "Vibrate2:$n;"
+    /**
+     * Command for actuator [index] of [toy], clamped to its own range.
+     * Two vibrators → `Vibrate1:`/`Vibrate2:`; a single one → `Vibrate:`.
+     */
+    fun actuatorCommand(toy: ToyType, index: Int, level: Int): ByteArray? {
+        val act = toy.actuators.getOrNull(index) ?: return null
+        val n = level.coerceIn(0, act.max)
+        val vibrators = toy.actuators.count { it.kind == ActuatorKind.VIBRATE }
+        val s = when (act.kind) {
+            ActuatorKind.VIBRATE ->
+                if (vibrators > 1) "Vibrate${toy.actuators.take(index + 1).count { it.kind == ActuatorKind.VIBRATE }}:$n;"
+                else "Vibrate:$n;"
             ActuatorKind.ROTATE -> "Rotate:$n;"
-            ActuatorKind.AIR -> "Air:Level:$n;"
+            ActuatorKind.SUCTION -> "Air:Level:$n;"
         }
         return s.toByteArray(Charsets.US_ASCII)
     }
 
-    /** `RotateChange;` — inverse le sens de rotation (actionneurs ROTATE). */
+    /** `RotateChange;` — reverses the rotation direction (ROTATE actuators). */
     fun rotateChange(): ByteArray = "RotateChange;".toByteArray(Charsets.US_ASCII)
 
-    // --- Conversions / parsing -------------------------------------------
+    // --- Conversions / parsing ---------------------------------------------
 
-    /** Borne une intensité dans [0..20]. */
+    /** Clamps an intensity to [0..20]. */
     fun clamp(intensity: Int): Int = intensity.coerceIn(0, INTENSITY_MAX)
 
-    /** Convertit une fraction UI [0f..1f] en niveau d'actionneur [0..max]. */
+    /** Converts a UI fraction [0f..1f] into an actuator level [0..max]. */
     fun fractionToLevel(fraction: Float, max: Int = INTENSITY_MAX): Int =
         (fraction.coerceIn(0f, 1f) * max).roundToInt()
 
     /**
-     * Parse une notification du toy. Renvoie un [Reply] typé.
-     * Exemples : `P:02:0082059AD3BD;`, `85;`, `OK;`.
+     * Parses a toy notification into a typed [Reply].
+     * Examples: `P:02:0082059AD3BD;`, `85;`, `OK;`.
      */
     fun parseReply(raw: ByteArray): Reply {
         val s = raw.toString(Charsets.US_ASCII).trim().trimEnd(';')
         return when {
             s.isEmpty() -> Reply.Unknown("")
             s == "OK" -> Reply.Ok
-            // DeviceType : "P:02:MAC" (modèle:firmware:MAC)
+            // DeviceType: "P:02:MAC" (model:firmware:MAC)
             s.contains(':') && s.substringBefore(':').length == 1 && s.substringBefore(':')[0].isLetter() -> {
                 val parts = s.split(':')
                 Reply.DeviceType(
@@ -92,8 +98,9 @@ object LovenseProtocol {
                     mac = parts.getOrElse(2) { "?" },
                 )
             }
-            // Batterie : un simple nombre, ex "85"
-            s.toIntOrNull() != null -> Reply.Battery(s.toInt())
+            // Battery: a plain number, e.g. "85" (clamped: a hostile or buggy
+            // device must not be able to inject an absurd value).
+            s.toIntOrNull() != null -> Reply.Battery(s.toInt().coerceIn(0, 100))
             else -> Reply.Unknown(s)
         }
     }
@@ -105,15 +112,14 @@ object LovenseProtocol {
         data class Unknown(val raw: String) : Reply
     }
 
-    // --- Détection des endpoints à la découverte de services --------------
+    // --- Endpoint detection at service discovery ---------------------------
 
     /**
-     * Parcourt les services GATT et retourne (TX write, RX notify) du toy.
+     * Walks the GATT services and returns the toy's (TX write, RX notify).
      *
-     * Heuristique robuste (indépendante de la révision d'UUID) : on cherche
-     * le service qui contient à la fois une caractéristique NOTIFY (RX) et
-     * une caractéristique inscriptible (TX). C'est la structure RX/TX type
-     * « port série » de tous les Lovense.
+     * Robust heuristic (independent of the UUID revision): find the service
+     * holding both a NOTIFY characteristic (RX) and a writable one (TX). That
+     * is the "serial port" RX/TX layout of every Lovense toy.
      */
     fun findEndpoints(services: List<BluetoothGattService>): Endpoints? {
         for (service in services) {

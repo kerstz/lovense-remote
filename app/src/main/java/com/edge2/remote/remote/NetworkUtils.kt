@@ -10,10 +10,10 @@ import java.net.NetworkInterface
 object NetworkUtils {
 
     /**
-     * IPv4 locale d'une interface **Wi-Fi / Ethernet** (jamais cellulaire), ou
-     * null. On exclut le cellulaire (`rmnet…`) : son IP `10.x` est site-local
-     * mais derrière le NAT opérateur → un lien LAN dessus est injoignable. Le
-     * partage LAN n'a de sens que sur Wi-Fi / Ethernet / partage de connexion.
+     * Local IPv4 of a **Wi-Fi / Ethernet** interface (never cellular), or null.
+     * Cellular (`rmnet…`) is excluded: its `10.x` address is site-local but sits
+     * behind carrier NAT → a LAN link on it is unreachable. LAN sharing only
+     * makes sense on Wi-Fi / Ethernet / tethering.
      */
     fun lanIpv4(): String? {
         return runCatching {
@@ -26,13 +26,13 @@ object NetworkUtils {
         }.getOrNull()
     }
 
-    /** Wi-Fi / Ethernet / hotspot — exclut le cellulaire (rmnet, ccmni, pdp…). */
+    /** Wi-Fi / Ethernet / hotspot — excludes cellular (rmnet, ccmni, pdp…). */
     private fun isLanInterface(name: String): Boolean {
         val n = name.lowercase()
         return n.startsWith("wlan") || n.startsWith("eth") || n.startsWith("ap") || n.startsWith("swlan")
     }
 
-    /** Génère un QR code (bitmap noir/blanc) pour [content]. */
+    /** Generates a black/white QR code bitmap for [content]. */
     fun qrBitmap(content: String, size: Int = 512): Bitmap {
         val matrix = QRCodeWriter().encode(content, BarcodeFormat.QR_CODE, size, size)
         val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.RGB_565)
