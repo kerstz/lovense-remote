@@ -10,7 +10,15 @@ import android.bluetooth.BluetoothStatusCodes
 import android.content.Context
 import android.os.Build
 import com.edge2.remote.R
-import java.util.concurrent.atomic.AtomicIntegerArray
+import com.edge2.remote.ble.db.DeviceDatabase
+import com.edge2.remote.ble.db.DbProtocol
+import com.edge2.remote.ble.proto.DeviceIo
+import com.edge2.remote.ble.proto.Ep
+import com.edge2.remote.ble.proto.Hint
+import com.edge2.remote.ble.proto.ProtocolHandler
+import com.edge2.remote.ble.proto.Protocols
+import com.edge2.remote.ble.proto.Write
+import java.util.UUID
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -18,62 +26,80 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
 
-/** Max actuators handled per toy (the most complex ones have 2-3). */
-internal const val MAX_ACTUATORS = 4
-
 /**
- * BLE link to ONE toy: GATT lifecycle (MTU, services, notifications, the
- * [driver]'s handshake), a serialized + coalesced write queue, and automatic
- * reconnection with back-off. Several instances coexist (multi-toy), each with
- * its own GATT callback.
+ * BLE link to ONE toy, for any supported brand:
+ *  1. GATT connect, MTU, service discovery;
+ *  2. endpoint mapping from the device database ("tx", "rx"…);
+ *  3. model identification + protocol init ([com.edge2.remote.ble.proto]);
+ *  4. a serialized + coalesced write queue (a slider moving 50×/s only sends
+ *     the latest value per actuator), keepalive, stroke generator, battery;
+ *  5. automatic reconnection with back-off, and a safe stop on close.
  *
- * Every write goes through a coalesced queue: if a slider moves 50×/s, only
- * the latest value per actuator is actually sent.
+ * Several instances coexist (multi-toy), each with its own GATT callback.
  */
 @SuppressLint("MissingPermission")
 class ToyConnection(
     context: Context,
     private val device: BluetoothDevice,
-    private val driver: ToyDriver,
+    private val db: DeviceDatabase,
+    private val protocol: DbProtocol,
+    private val advertisedName: String,
+    private val manufacturerData: Map<Int, ByteArray>,
 ) {
     private val appContext = context.applicationContext
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     val address: String = device.address
 
-    private val _status = MutableStateFlow(ToyStatus(address, driver.toy, LinkState.Connecting))
+    private val brand = DeviceDatabase.brandOf(protocol)
+    private var toy: ToyType = ToyType.from(
+        db.definition(protocol.id, advertisedName) ?: error("unknown protocol"), brand,
+    )
+
+    private val _status = MutableStateFlow(ToyStatus(address, toy, LinkState.Connecting))
     val status: StateFlow<ToyStatus> = _status.asStateFlow()
 
-    private val toy: ToyType get() = driver.toy
-
     @Volatile private var gatt: BluetoothGatt? = null
-    @Volatile private var tx: BluetoothGattCharacteristic? = null
+    @Volatile private var handler: ProtocolHandler? = null
+    /** Endpoint name → characteristic, for the current GATT session. */
+    @Volatile private var endpoints: Map<String, BluetoothGattCharacteristic> = emptyMap()
 
     /** true = shutdown requested (user or fatal error) → no reconnection. */
     @Volatile private var closed = false
     private var reconnectAttempts = 0
+    private var sessionJob: Job? = null
 
+    // GATT callbacks → coroutines.
     private var mtuDeferred: CompletableDeferred<Unit>? = null
     private var servicesDeferred: CompletableDeferred<Boolean>? = null
-    private var descriptorDeferred: CompletableDeferred<Boolean>? = null
+    @Volatile private var opDeferred: CompletableDeferred<ByteArray?>? = null
+    private val gattMutex = Mutex()
+    private val notifications = Channel<Pair<String, ByteArray>>(64, BufferOverflow.DROP_OLDEST)
 
-    private val desired = AtomicIntegerArray(MAX_ACTUATORS)
-    private val lastSent = IntArray(MAX_ACTUATORS) { -1 }
+    // Write queue: desired level per actuator (signed for rotation).
+    private val desired = HashMap<Int, Int>()
+    private val lastSent = HashMap<Int, Int>()
+    /** Rotation direction per actuator (+1 / −1). */
+    private val direction = HashMap<Int, Int>()
+    /** Stroke speed (0..1) per STROKE actuator. */
+    private val strokeSpeed = HashMap<Int, Float>()
     private val writeSignal = Channel<Unit>(Channel.CONFLATED)
-    private val writeMutex = Mutex()
-    @Volatile private var writeAck: CompletableDeferred<Boolean>? = null
-    private var writerJob: Job? = null
+    @Volatile private var lastWrite: Write? = null
+    @Volatile private var lastWriteAt = 0L
 
     private fun str(resId: Int): String = appContext.getString(resId)
 
@@ -87,40 +113,51 @@ class ToyConnection(
         connectGatt()
     }
 
-    /** Sets actuator [index] to a raw level (clamped to its range). */
-    fun setLevel(index: Int, level: Int) {
-        val act = toy.actuators.getOrNull(index) ?: return
-        desired.set(index, level.coerceIn(0, act.max))
-        writeSignal.trySend(Unit)
-    }
-
-    /** Sets actuator [index] from a [0f..1f] fraction. */
+    /** Sets actuator [index] (position in `toy.actuators`) from a 0..1 fraction. */
     fun setFraction(index: Int, fraction: Float) {
         val act = toy.actuators.getOrNull(index) ?: return
-        setLevel(index, LovenseProtocol.fractionToLevel(fraction, act.max))
-    }
-
-    fun stop() {
-        toy.actuators.indices.forEach { desired.set(it, 0) }
+        synchronized(desired) {
+            if (act.kind == ActuatorKind.STROKE) {
+                strokeSpeed[index] = fraction.coerceIn(0f, 1f)
+                return
+            }
+            val level = act.levelFor(fraction) ?: return
+            desired[index] = if (act.kind == ActuatorKind.ROTATE && act.min < 0) level * (direction[index] ?: 1) else level
+        }
         writeSignal.trySend(Unit)
     }
 
+    /** Flips the rotation direction of actuator [index] (signed-range rotators only). */
     fun reverse(index: Int) {
-        scope.launch {
-            val cmd = driver.reverse(index, lastSent.copyOf(toy.actuators.size)) ?: return@launch
-            writeCommand(cmd)
+        val act = toy.actuators.getOrNull(index) ?: return
+        if (!act.reversible) return
+        synchronized(desired) {
+            direction[index] = -(direction[index] ?: 1)
+            desired[index]?.let { desired[index] = -it }
         }
+        writeSignal.trySend(Unit)
+    }
+
+    /** Everything off: motors to 0, heating/LED/pump off, strokes stopped. */
+    fun stop() {
+        synchronized(desired) {
+            toy.actuators.forEachIndexed { i, a ->
+                if (a.kind == ActuatorKind.STROKE) strokeSpeed[i] = 0f
+                else if (a.min <= 0) desired[i] = 0
+            }
+        }
+        writeSignal.trySend(Unit)
     }
 
     /**
-     * Closes the link: first sends a motor stop (best effort, 600 ms max) so a
+     * Closes the link: first stops everything (best effort, 800 ms max) so a
      * toy is never left running on its own, then closes GATT.
      */
     fun close(onClosed: () -> Unit = {}) {
         closed = true
         scope.launch {
             stop()
-            withTimeoutOrNull(600) { flushStop() }
+            withTimeoutOrNull(800) { flushStop() }
             teardownGatt()
             onClosed()
             scope.cancel()
@@ -128,9 +165,92 @@ class ToyConnection(
     }
 
     private suspend fun flushStop() {
-        val n = toy.actuators.size
-        val zero = IntArray(n)
-        for (cmd in driver.encode(zero, IntArray(n) { -1 })) writeCommand(cmd)
+        val h = handler ?: return
+        toy.actuators.forEach { a ->
+            if (a.kind != ActuatorKind.STROKE && a.min <= 0) {
+                for (w in dispatch(h, a, 0)) io.write(w)
+            }
+        }
+    }
+
+    // ====================================================================
+    // Device I/O for protocols
+    // ====================================================================
+
+    private val io = object : DeviceIo {
+        override val name: String get() = advertisedName
+        override val manufacturerData: Map<Int, ByteArray> get() = this@ToyConnection.manufacturerData
+
+        override fun hint(hint: Hint?) { _status.update { it.copy(hint = hint) } }
+
+        override fun hasEndpoint(endpoint: String) = endpoints.containsKey(endpoint)
+
+        override suspend fun write(w: Write): Boolean = gattMutex.withLock {
+            val g = gatt ?: return false
+            val ch = endpoints[w.endpoint] ?: return false
+            val ack = CompletableDeferred<ByteArray?>()
+            opDeferred = ack
+            val type = if (w.withResponse || ch.properties and BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE == 0)
+                BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT else BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
+            val started = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                g.writeCharacteristic(ch, w.data, type) == BluetoothStatusCodes.SUCCESS
+            } else {
+                @Suppress("DEPRECATION")
+                run { ch.writeType = type; ch.value = w.data; g.writeCharacteristic(ch) }
+            }
+            if (!started) { opDeferred = null; return false }
+            val ok = withTimeoutOrNull(1_000) { ack.await() } != null
+            opDeferred = null
+            if (ok) { lastWrite = w; lastWriteAt = System.currentTimeMillis() }
+            ok
+        }
+
+        override suspend fun read(endpoint: String): ByteArray? = gattMutex.withLock {
+            val g = gatt ?: return null
+            val ch = endpoints[endpoint] ?: return null
+            val result = CompletableDeferred<ByteArray?>()
+            opDeferred = result
+            if (!g.readCharacteristic(ch)) { opDeferred = null; return null }
+            val v = withTimeoutOrNull(1_000) { result.await() }
+            opDeferred = null
+            v?.takeIf { it.isNotEmpty() }
+        }
+
+        override suspend fun subscribe(endpoint: String): Boolean = setNotify(endpoint, true)
+        override suspend fun unsubscribe(endpoint: String) { setNotify(endpoint, false) }
+
+        override suspend fun awaitNotification(endpoint: String?, timeoutMs: Long): ByteArray? =
+            withTimeoutOrNull(timeoutMs.coerceAtLeast(1)) {
+                while (true) {
+                    val (ep, data) = notifications.receive()
+                    if (endpoint == null || ep == endpoint) return@withTimeoutOrNull data
+                }
+                @Suppress("UNREACHABLE_CODE") null
+            }
+    }
+
+    private suspend fun setNotify(endpoint: String, enable: Boolean): Boolean = gattMutex.withLock {
+        val g = gatt ?: return false
+        val ch = endpoints[endpoint] ?: return false
+        g.setCharacteristicNotification(ch, enable)
+        val cccd = ch.getDescriptor(LovenseProtocol.CCCD_UUID) ?: return true
+        val value = when {
+            !enable -> BluetoothGattDescriptor.DISABLE_NOTIFICATION_VALUE
+            ch.properties and BluetoothGattCharacteristic.PROPERTY_NOTIFY != 0 -> BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
+            else -> BluetoothGattDescriptor.ENABLE_INDICATION_VALUE
+        }
+        val done = CompletableDeferred<ByteArray?>()
+        opDeferred = done
+        val started = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            g.writeDescriptor(cccd, value) == BluetoothStatusCodes.SUCCESS
+        } else {
+            @Suppress("DEPRECATION")
+            run { cccd.value = value; g.writeDescriptor(cccd) }
+        }
+        if (!started) { opDeferred = null; return false }
+        val ok = withTimeoutOrNull(2_000) { done.await() } != null
+        opDeferred = null
+        ok
     }
 
     // ====================================================================
@@ -145,93 +265,120 @@ class ToyConnection(
     private val callback = object : BluetoothGattCallback() {
         override fun onConnectionStateChange(g: BluetoothGatt, status: Int, newState: Int) {
             when (newState) {
-                BluetoothGatt.STATE_CONNECTED -> scope.launch { runHandshake(g) }
+                BluetoothGatt.STATE_CONNECTED -> scope.launch { runSession(g) }
                 BluetoothGatt.STATE_DISCONNECTED -> scope.launch { onDisconnected() }
             }
         }
 
-        override fun onMtuChanged(g: BluetoothGatt, mtu: Int, status: Int) {
-            mtuDeferred?.complete(Unit)
-        }
+        override fun onMtuChanged(g: BluetoothGatt, mtu: Int, status: Int) { mtuDeferred?.complete(Unit) }
 
         override fun onServicesDiscovered(g: BluetoothGatt, status: Int) {
             servicesDeferred?.complete(status == BluetoothGatt.GATT_SUCCESS)
         }
 
         override fun onDescriptorWrite(g: BluetoothGatt, descriptor: BluetoothGattDescriptor, status: Int) {
-            descriptorDeferred?.complete(status == BluetoothGatt.GATT_SUCCESS)
+            opDeferred?.complete(if (status == BluetoothGatt.GATT_SUCCESS) ByteArray(0) else null)
         }
 
         override fun onCharacteristicWrite(g: BluetoothGatt, ch: BluetoothGattCharacteristic, status: Int) {
-            writeAck?.complete(status == BluetoothGatt.GATT_SUCCESS)
+            opDeferred?.complete(if (status == BluetoothGatt.GATT_SUCCESS) ByteArray(0) else null)
+        }
+
+        @Deprecated("Deprecated in API 33")
+        override fun onCharacteristicRead(g: BluetoothGatt, ch: BluetoothGattCharacteristic, status: Int) {
+            @Suppress("DEPRECATION")
+            opDeferred?.complete(if (status == BluetoothGatt.GATT_SUCCESS) (ch.value ?: ByteArray(0)) else null)
+        }
+
+        override fun onCharacteristicRead(g: BluetoothGatt, ch: BluetoothGattCharacteristic, value: ByteArray, status: Int) {
+            opDeferred?.complete(if (status == BluetoothGatt.GATT_SUCCESS) value else null)
         }
 
         @Deprecated("Deprecated in API 33")
         override fun onCharacteristicChanged(g: BluetoothGatt, ch: BluetoothGattCharacteristic) {
             @Suppress("DEPRECATION")
-            handleNotification(ch.value ?: return)
+            onNotify(ch, ch.value ?: return)
         }
 
         override fun onCharacteristicChanged(g: BluetoothGatt, ch: BluetoothGattCharacteristic, value: ByteArray) {
-            handleNotification(value)
+            onNotify(ch, value)
         }
     }
 
-    /** Post-connection sequence: MTU → services → endpoints → notify → handshake. */
-    private suspend fun runHandshake(g: BluetoothGatt) {
-        mtuDeferred = CompletableDeferred()
-        g.requestMtu(64)
-        withTimeoutOrNull(3_000) { mtuDeferred?.await() }
-
-        servicesDeferred = CompletableDeferred()
-        g.discoverServices()
-        val ok = withTimeoutOrNull(8_000) { servicesDeferred?.await() } ?: false
-        if (!ok) { retry(); return }
-
-        // Expected service missing = wrong device/brand → permanent error.
-        val endpoints = driver.endpoints(g.services)
-        if (endpoints == null) { fatal(str(R.string.err_chars)); return }
-        tx = endpoints.tx
-
-        endpoints.rx?.let { rx ->
-            if (!enableNotifications(g, rx)) { retry(); return }
-        }
-
-        reconnectAttempts = 0
-        resetWriteState()
-        _status.update { it.copy(toy = toy, link = LinkState.Connected, levels = List(toy.actuators.size) { 0 }) }
-        startWriterLoop()
-        for (cmd in driver.handshake()) writeCommand(cmd)
+    private fun onNotify(ch: BluetoothGattCharacteristic, value: ByteArray) {
+        // Bounded: a hostile device must not be able to flood us.
+        if (value.size > 256) return
+        val ep = endpoints.entries.firstOrNull { it.value.uuid == ch.uuid }?.key ?: return
+        notifications.trySend(ep to value)
+        handler?.onNotification(ep, value)?.let { b -> _status.update { it.copy(battery = b.coerceIn(0, 100)) } }
     }
 
-    private suspend fun enableNotifications(g: BluetoothGatt, ch: BluetoothGattCharacteristic): Boolean {
-        g.setCharacteristicNotification(ch, true)
-        val cccd = ch.getDescriptor(LovenseProtocol.CCCD_UUID) ?: return false
-        descriptorDeferred = CompletableDeferred()
-        val enable = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            g.writeDescriptor(cccd, enable)
-        } else {
-            @Suppress("DEPRECATION")
-            run { cccd.value = enable; g.writeDescriptor(cccd) }
-        }
-        return withTimeoutOrNull(3_000) { descriptorDeferred?.await() } ?: false
-    }
+    /** Post-connection session: MTU → services → endpoints → identify → init → run. */
+    private suspend fun runSession(g: BluetoothGatt) {
+        sessionJob?.cancel()
+        sessionJob = scope.launch {
+            mtuDeferred = CompletableDeferred()
+            g.requestMtu(128)
+            withTimeoutOrNull(3_000) { mtuDeferred?.await() }
 
-    private fun handleNotification(bytes: ByteArray) {
-        // Bounded notification: a hostile device must not be able to flood us.
-        if (bytes.size > 64) return
-        when (val ev = driver.onNotification(bytes)) {
-            is DriverEvent.Battery -> _status.update { it.copy(battery = ev.percent) }
-            is DriverEvent.ToyChanged -> {
-                resetWriteState()
-                _status.update { it.copy(toy = ev.toy, levels = List(ev.toy.actuators.size) { 0 }) }
+            servicesDeferred = CompletableDeferred()
+            g.discoverServices()
+            if (withTimeoutOrNull(8_000) { servicesDeferred?.await() } != true) { retry(); return@launch }
+
+            endpoints = resolveEndpoints(g, protocol)
+            if (!endpoints.containsKey(Ep.TX) && endpoints.keys.none { it.startsWith("tx") || it == Ep.GENERIC0 || it == Ep.COMMAND }) {
+                fatal(str(R.string.err_chars)); return@launch
             }
-            null -> Unit
+            while (notifications.tryReceive().isSuccess) Unit
+
+            val result = runCatching {
+                withTimeout(90_000) {
+                    val spec = Protocols.get(protocol.id) ?: error("unsupported protocol ${protocol.id}")
+                    val ident = spec.identify(io)
+                    val finalSpec = ident.protocolId?.let { Protocols.get(it) } ?: spec
+                    val defn = db.definition(finalSpec.id, ident.identifier)
+                        ?: db.definition(protocol.id, ident.identifier)
+                        ?: error("no definition")
+                    val h = finalSpec.create(defn, io, ident.identifier)
+                    toy = ToyType.from(defn, brand)
+                    h
+                }
+            }
+            val h = result.getOrElse {
+                android.util.Log.w("ToyConnection", "init failed: ${it.message}")
+                fatal(it.message ?: str(R.string.err_chars)); return@launch
+            }
+            handler = h
+            io.hint(null)
+            reconnectAttempts = 0
+            synchronized(desired) { desired.clear(); lastSent.clear(); strokeSpeed.clear() }
+            _status.update { it.copy(toy = toy, link = LinkState.Connected, levels = List(toy.actuators.size) { 0 }, hint = null) }
+            h.attach(io, this)
+            launch { writerLoop(h) }
+            h.keepaliveMs?.let { ms -> launch { keepaliveLoop(ms) } }
+            launch { strokeLoop(h) }
+            launch { batteryLoop(h) }
         }
+    }
+
+    /** Endpoint name → characteristic, from the protocol's service map (Lovense: heuristic fallback). */
+    private fun resolveEndpoints(g: BluetoothGatt, p: DbProtocol): Map<String, BluetoothGattCharacteristic> {
+        val out = HashMap<String, BluetoothGattCharacteristic>()
+        for ((svc, eps) in p.btle.services) {
+            val service = runCatching { g.getService(UUID.fromString(svc)) }.getOrNull() ?: continue
+            for ((name, uuid) in eps) {
+                val ch = runCatching { service.getCharacteristic(UUID.fromString(uuid)) }.getOrNull() ?: continue
+                out.putIfAbsent(name, ch)
+            }
+        }
+        if (p.id == "lovense" && !out.containsKey(Ep.TX)) {
+            LovenseProtocol.findEndpoints(g.services)?.let { (tx, rx) -> out[Ep.TX] = tx; out[Ep.RX] = rx }
+        }
+        return out
     }
 
     private suspend fun onDisconnected() {
+        sessionJob?.cancelAndJoin()
         teardownGatt()
         if (closed) return
         // Auto-reconnect to the SAME toy with back-off: 1, 2, 4, 8 s (capped).
@@ -242,78 +389,102 @@ class ToyConnection(
     }
 
     /** Transient failure: disconnect, [onDisconnected] will retry. */
-    private fun retry() {
-        runCatching { gatt?.disconnect() }
-    }
+    private fun retry() { runCatching { gatt?.disconnect() } }
 
     /** Permanent failure: no reconnection. */
     private suspend fun fatal(reason: String) {
         closed = true
         teardownGatt()
-        _status.update { it.copy(link = LinkState.Error(reason)) }
+        _status.update { it.copy(link = LinkState.Error(reason), hint = null) }
     }
 
     private suspend fun teardownGatt() {
-        writerJob?.cancelAndJoin()
-        writerJob = null
+        handler = null
         runCatching { gatt?.close() }
         gatt = null
-        tx = null
+        endpoints = emptyMap()
     }
 
     // ====================================================================
-    // Serialized + coalesced write queue
+    // Loops: writes, keepalive, strokes, battery
     // ====================================================================
 
-    private fun resetWriteState() {
-        for (i in 0 until desired.length()) desired.set(i, 0)
-        lastSent.fill(-1)
+    private fun dispatch(h: ProtocolHandler, a: Actuator, v: Int): List<Write> = when (a.kind) {
+        ActuatorKind.VIBRATE -> h.vibrate(a.featureIndex, v)
+        ActuatorKind.ROTATE -> h.rotate(a.featureIndex, v)
+        ActuatorKind.OSCILLATE -> h.oscillate(a.featureIndex, v)
+        ActuatorKind.CONSTRICT -> h.constrict(a.featureIndex, v)
+        ActuatorKind.TEMPERATURE -> h.temperature(a.featureIndex, v)
+        ActuatorKind.LED -> h.led(a.featureIndex, v)
+        ActuatorKind.SPRAY -> h.spray(a.featureIndex, v)
+        ActuatorKind.POSITION -> h.position(a.featureIndex, v)
+        ActuatorKind.STROKE -> emptyList()
     }
 
-    private fun startWriterLoop() {
-        writerJob?.cancel()
-        writerJob = scope.launch {
-            for (signal in writeSignal) {
-                // Loop until converged (the target may have changed during the write).
-                while (true) {
-                    val n = toy.actuators.size
-                    val target = IntArray(n) { desired.get(it) }
-                    val last = lastSent.copyOf(n)
-                    if (target.contentEquals(last)) break
-                    val cmds = driver.encode(target, last)
-                    var ok = true
-                    for (cmd in cmds) if (!writeCommand(cmd)) { ok = false; break }
-                    if (!ok) break // the next signal will retry
-                    target.copyInto(lastSent)
-                    _status.update { it.copy(levels = target.toList()) }
+    private suspend fun writerLoop(h: ProtocolHandler) {
+        for (signal in writeSignal) {
+            while (true) {
+                val changes = synchronized(desired) {
+                    desired.filter { (i, v) -> lastSent[i] != v }.toList()
                 }
+                if (changes.isEmpty()) break
+                var ok = true
+                for ((i, v) in changes) {
+                    val a = toy.actuators.getOrNull(i) ?: continue
+                    for (w in dispatch(h, a, v)) if (!io.write(w)) { ok = false; break }
+                    if (!ok) break
+                    synchronized(desired) { lastSent[i] = v }
+                    // A pump press is momentary: forget it so the next press is sent again.
+                    if (a.kind == ActuatorKind.SPRAY && v != 0) synchronized(desired) { desired[i] = 0; lastSent[i] = 0 }
+                }
+                publishLevels()
+                if (!ok) break // the next signal will retry
             }
         }
     }
 
-    /** Writes a command to TX, serialized, and waits for the GATT ACK. */
-    private suspend fun writeCommand(bytes: ByteArray): Boolean = writeMutex.withLock {
-        val g = gatt ?: return false
-        val ch = tx ?: return false
-        val ack = CompletableDeferred<Boolean>()
-        writeAck = ack
-        if (!issueWrite(g, ch, bytes)) { writeAck = null; return false }
-        val result = withTimeoutOrNull(1_000) { ack.await() } ?: false
-        writeAck = null
-        result
+    private fun publishLevels() {
+        val levels = synchronized(desired) { toy.actuators.indices.map { lastSent[it] ?: 0 } }
+        _status.update { it.copy(levels = levels) }
     }
 
-    private fun issueWrite(g: BluetoothGatt, ch: BluetoothGattCharacteristic, bytes: ByteArray): Boolean {
-        val type = ch.preferredWriteType()
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            g.writeCharacteristic(ch, bytes, type) == BluetoothStatusCodes.SUCCESS
-        } else {
-            @Suppress("DEPRECATION")
-            run {
-                ch.writeType = type
-                ch.value = bytes
-                g.writeCharacteristic(ch)
+    /** Hardware that stops without traffic: repeat the last packet. */
+    private suspend fun keepaliveLoop(ms: Long) {
+        while (scope.isActive) {
+            delay(ms)
+            val w = lastWrite ?: continue
+            if (System.currentTimeMillis() - lastWriteAt >= ms) io.write(w)
+        }
+    }
+
+    /**
+     * STROKE actuators take positions + durations: turn a 0..1 "speed" into
+     * back-and-forth strokes over the full range (slow = 1.5 s, fast = 0.25 s).
+     */
+    private suspend fun strokeLoop(h: ProtocolHandler) {
+        val strokers = toy.actuators.indices.filter { toy.actuators[it].kind == ActuatorKind.STROKE }
+        if (strokers.isEmpty()) return
+        var up = true
+        while (scope.isActive) {
+            var waited = false
+            for (i in strokers) {
+                val s = synchronized(desired) { strokeSpeed[i] ?: 0f }
+                if (s <= 0f) continue
+                val a = toy.actuators[i]
+                val half = (1500 - (s * 1250)).toInt().coerceAtLeast(150) / 2
+                for (w in h.hwPosition(a.featureIndex, if (up) a.max else a.min.coerceAtLeast(0), half)) io.write(w)
+                delay(half.toLong())
+                waited = true
             }
+            up = !up
+            if (!waited) delay(100)
+        }
+    }
+
+    private suspend fun batteryLoop(h: ProtocolHandler) {
+        while (scope.isActive) {
+            runCatching { h.battery(io) }.getOrNull()?.let { b -> _status.update { it.copy(battery = b.coerceIn(0, 100)) } }
+            delay(60_000)
         }
     }
 }

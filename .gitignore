@@ -29,3 +29,5 @@ apk_extract/
 # Signing keystores (NEVER commit)
 *.jks
 *.keystore
+__pycache__/
+*.pyc

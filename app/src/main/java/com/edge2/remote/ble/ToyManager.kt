@@ -12,6 +12,10 @@ import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.content.ContextCompat
 import com.edge2.remote.R
+import com.edge2.remote.ble.db.Advertisement
+import com.edge2.remote.ble.db.DbProtocol
+import com.edge2.remote.ble.db.DeviceDatabase
+import com.edge2.remote.ble.proto.Protocols
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -57,8 +61,14 @@ class ToyManager(context: Context) {
     private val order = mutableListOf<String>()
     private var aggregator: Job? = null
 
-    /** Identifications made at scan time (address → driver to create). */
-    private val matches = ConcurrentHashMap<String, ToyProtocols.Match>()
+    /** Device database (assets/devices.json), loaded once. */
+    val database: DeviceDatabase by lazy {
+        DeviceDatabase.parse(appContext.assets.open("devices.json").bufferedReader().use { it.readText() })
+    }
+
+    /** What we saw at scan time, per address (protocol + advertisement). */
+    private class Seen(val protocol: DbProtocol, val name: String, val mfr: Map<Int, ByteArray>)
+    private val seen = ConcurrentHashMap<String, Seen>()
 
     // ====================================================================
     // Scan
@@ -75,7 +85,7 @@ class ToyManager(context: Context) {
         _discovered.value = emptyList()
         val settings = ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY).build()
         // No hardware filter (names can't be prefix-filtered, brands vary):
-        // devices are identified in onScanResult through ToyProtocols.
+        // devices are identified in onScanResult through the device database.
         scanner.startScan(null, settings, scanCallback)
         _scanState.value = ScanState.Scanning
     }
@@ -87,15 +97,23 @@ class ToyManager(context: Context) {
 
     private val scanCallback = object : ScanCallback() {
         override fun onScanResult(callbackType: Int, result: ScanResult) {
-            val name = result.device.name ?: result.scanRecord?.deviceName
-            val uuids = result.scanRecord?.serviceUuids?.map { it.uuid }.orEmpty()
-            val match = ToyProtocols.identify(name, uuids) ?: return
+            val record = result.scanRecord
+            val name = result.device.name ?: record?.deviceName
+            val mfr = HashMap<Int, ByteArray>()
+            record?.manufacturerSpecificData?.let { sd ->
+                for (i in 0 until sd.size()) mfr[sd.keyAt(i)] = sd.valueAt(i)
+            }
+            val uuids = record?.serviceUuids?.map { it.uuid }.orEmpty()
+            val protocol = database.identify(Advertisement(name, mfr, uuids)) ?: return
             val address = result.device.address ?: return
             if (connections.containsKey(address)) return // already managed
-            matches[address] = match
+            seen[address] = Seen(protocol, name.orEmpty(), mfr)
             val toy = DiscoveredToy(
                 address = address, bleName = name.orEmpty(), rssi = result.rssi,
-                brand = match.guess.brand, displayName = match.guess.displayName,
+                protocolId = protocol.id,
+                brand = DeviceDatabase.brandOf(protocol),
+                displayName = database.guessName(protocol, name),
+                supported = Protocols.get(protocol.id) != null,
             )
             _discovered.update { list ->
                 (list.filterNot { it.address == address } + toy).sortedByDescending { it.rssi }
@@ -116,12 +134,13 @@ class ToyManager(context: Context) {
         val a = adapter ?: return
         if (connections.containsKey(found.address)) return
         if (connections.size >= MAX_TOYS) return
-        val match = matches[found.address] ?: ToyProtocols.identify(found.bleName) ?: return
+        if (!found.supported) return
+        val s = seen[found.address] ?: return
         val device = runCatching { a.getRemoteDevice(found.address) }.getOrNull() ?: run {
             _scanState.value = ScanState.Error(str(R.string.err_device_gone)); return
         }
         stopDiscovery()
-        val conn = ToyConnection(appContext, device, match.newDriver())
+        val conn = ToyConnection(appContext, device, database, s.protocol, s.name, s.mfr)
         synchronized(order) {
             connections[found.address] = conn
             order += found.address
@@ -165,18 +184,27 @@ class ToyManager(context: Context) {
     private fun conn(address: String) = connections[address]
     private fun all() = synchronized(order) { order.mapNotNull { connections[it] } }
 
-    fun setLevel(address: String, index: Int, level: Int) { conn(address)?.setLevel(index, level) }
     fun setFraction(address: String, index: Int, fraction: Float) { conn(address)?.setFraction(index, fraction) }
     fun reverse(address: String, index: Int) { conn(address)?.reverse(index) }
     fun stop(address: String) { conn(address)?.stop() }
 
-    /** Actuator [index] of EVERY toy (ignored by toys that have fewer). */
-    fun setFractionAll(index: Int, fraction: Float) = all().forEach { it.setFraction(index, fraction) }
-
-    /** Every actuator of every toy to the same fraction. */
-    fun setAllFraction(fraction: Float) = all().forEach { c ->
-        c.status.value.toy.actuators.indices.forEach { c.setFraction(it, fraction) }
+    /** Motion actuator n° [motionIndex] of one toy (patterns, remote M1/M2). */
+    fun setMotion(address: String, motionIndex: Int, fraction: Float) {
+        val c = conn(address) ?: return
+        c.status.value.toy.motion.getOrNull(motionIndex)?.let { c.setFraction(it, fraction) }
     }
+
+    /** Motion actuator n° [motionIndex] of EVERY toy (ignored by toys that have fewer). */
+    fun setMotionAll(motionIndex: Int, fraction: Float) = all().forEach { setMotion(it.address, motionIndex, fraction) }
+
+    /** Every motion actuator of one toy to the same fraction. */
+    fun setAllMotion(address: String, fraction: Float) {
+        val c = conn(address) ?: return
+        c.status.value.toy.motion.forEach { c.setFraction(it, fraction) }
+    }
+
+    /** Every motion actuator of every toy to the same fraction. */
+    fun setAllFraction(fraction: Float) = all().forEach { setAllMotion(it.address, fraction) }
 
     fun stopAll() = all().forEach { it.stop() }
 
