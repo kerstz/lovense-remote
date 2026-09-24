@@ -1,100 +1,117 @@
 package com.edge2.remote.ble
 
+import com.edge2.remote.ble.db.DeviceDefinition
+import com.edge2.remote.ble.db.FeatureDef
+import com.edge2.remote.ble.db.OutputType
+import kotlin.math.roundToInt
+
 /**
- * Multi-brand / multi-toy model (see docs/research/lovense-ble-protocol.md and
- * docs/research/other-brands.md).
- *
- * A toy = a [ToyType] = a brand + a list of [Actuator]s. Each brand has its own
- * BLE encoding ([ToyDriver]); the UI, patterns and sharing only see generic
- * actuators driven with `0..max` levels.
+ * Multi-brand / multi-toy model. A toy = a [ToyType] = a model name + a list of
+ * [Actuator]s built from the device database. The UI adapts to the actuator
+ * kinds; patterns and remote control drive the "motion" actuators.
  */
 
-/** Supported brands. [experimental] = community protocol data, not tested on hardware here. */
-enum class Brand(val displayName: String, val experimental: Boolean) {
-    LOVENSE("Lovense", false),
-    WEVIBE("We-Vibe", true),
-    VORZE("Vorze", true),
-    MAGIC_MOTION("Magic Motion", true),
-}
-
-/** Generic actuator type (the encoding depends on the brand). */
-enum class ActuatorKind(val reversible: Boolean = false) {
+/** What an actuator does (drives which control the UI shows). */
+enum class ActuatorKind {
     VIBRATE,
-    ROTATE(reversible = true),
-    SUCTION,
+    ROTATE,
+    /** Thrusting / oscillation speed. */
+    OSCILLATE,
+    /** Suction / constriction / pump. */
+    CONSTRICT,
+    /** Heating. */
+    TEMPERATURE,
+    LED,
+    /** Lube pump / spray (momentary). */
+    SPRAY,
+    /** Absolute position (stroker). */
+    POSITION,
+    /** Stroker driven by position + duration: the app generates the strokes. */
+    STROKE;
+
+    /** Actuators that patterns, presets and remote control drive. */
+    val isMotion: Boolean get() = this == VIBRATE || this == ROTATE || this == OSCILLATE || this == CONSTRICT || this == STROKE
 }
 
-/** A concrete actuator: type + the toy's own `0..max` range. */
+/** A concrete actuator: kind + the toy's own value range. */
 data class Actuator(
+    /** Feature index, as the protocol expects it. */
+    val featureIndex: Int,
     val kind: ActuatorKind,
+    val min: Int,
     val max: Int,
+    val description: String? = null,
 ) {
-    val reversible: Boolean get() = kind.reversible
-}
+    /** Rotation with a signed range → the direction can be flipped. */
+    val reversible: Boolean get() = kind == ActuatorKind.ROTATE && min < 0
 
-/** A toy model: brand, internal code, display name, actuators. */
-data class ToyType(
-    val brand: Brand,
-    val code: String,
-    val displayName: String,
-    val actuators: List<Actuator>,
-) {
-    /** 2 vibrators → XY pad (Edge, Gemini, We-Vibe Sync…). */
-    val isDualVibrate: Boolean
-        get() = actuators.size == 2 && actuators.all { it.kind == ActuatorKind.VIBRATE }
-}
+    /** On/off only (e.g. most heaters, LEDs, pumps). */
+    val isToggle: Boolean get() = max - maxOf(min, 0) <= 1
 
-/**
- * Lovense registry + resolution from the `DeviceType` code or, failing that,
- * the BLE name. Unknown toy → single-vibrator fallback.
- */
-object ToyRegistry {
-
-    private val vibrate = listOf(Actuator(ActuatorKind.VIBRATE, 20))
-    private val dualVibrate = listOf(Actuator(ActuatorKind.VIBRATE, 20), Actuator(ActuatorKind.VIBRATE, 20))
-
-    /** Fallback: 1 vibrator (the whole single-vibrator family + unknown toys). */
-    val generic = ToyType(Brand.LOVENSE, "?", "Lovense", vibrate)
-
-    private fun lv(code: String, name: String, acts: List<Actuator>) = ToyType(Brand.LOVENSE, code, name, acts)
-
-    // Indexed by DeviceType code. Alternative codes point to the same entry.
-    private val byCode: Map<String, ToyType> = buildMap {
-        fun put(codes: List<String>, t: ToyType) = codes.forEach { put(it, t) }
-        put(listOf("S", "AN"), lv("S", "Lush", vibrate))
-        put(listOf("Z"), lv("Z", "Hush", vibrate))
-        put(listOf("W"), lv("W", "Domi", vibrate))
-        put(listOf("X"), lv("X", "Ferri", vibrate))
-        put(listOf("L"), lv("L", "Ambi", vibrate))
-        put(listOf("R"), lv("R", "Diamo", vibrate))
-        put(listOf("T"), lv("T", "Calor", vibrate))
-        put(listOf("O", "OC"), lv("O", "Osci", vibrate))
-        put(listOf("ED", "EZ"), lv("ED", "Gush", vibrate))
-        put(listOf("P", "PA", "PB"), lv("P", "Edge", dualVibrate))
-        put(listOf("N"), lv("N", "Gemini", dualVibrate))
-        put(listOf("EB"), lv("EB", "Hyphy", dualVibrate))
-        put(listOf("A", "C"), lv("A", "Nora", listOf(
-            Actuator(ActuatorKind.VIBRATE, 20), Actuator(ActuatorKind.ROTATE, 20),
-        )))
-        // Air:Level — range 0..5 per the community (0..3 according to other sources).
-        put(listOf("B"), lv("B", "Max", listOf(
-            Actuator(ActuatorKind.VIBRATE, 20), Actuator(ActuatorKind.SUCTION, 5),
-        )))
-        // Gravity: its thrust has no reliable ASCII command → vibrator only.
-        put(listOf("EA"), lv("EA", "Gravity", vibrate))
+    /** Level for a UI fraction (0..1); null = nothing to send (range doesn't include 0). */
+    fun levelFor(fraction: Float): Int? {
+        val f = fraction.coerceIn(0f, 1f)
+        return if (min > 0) {
+            if (f <= 0f) null else min + (f * (max - min)).roundToInt()
+        } else {
+            (f * max).roundToInt()
+        }
     }
 
-    /** Resolves by `DeviceType` code (case-insensitive). */
-    fun byDeviceCode(code: String): ToyType? = byCode[code.uppercase()]
+    /** Fraction (0..1) for a level, for display. */
+    fun fractionOf(level: Int): Float = when {
+        max <= 0 -> 0f
+        min > 0 -> if (level <= 0) 0f else (level - min).toFloat() / (max - min).coerceAtLeast(1)
+        else -> kotlin.math.abs(level).toFloat() / max
+    }
+}
 
-    /**
-     * Resolves by BLE name (`LVS-Edge2-…`). Fallback heuristic before the
-     * `DeviceType;` handshake: the model token is matched against known names.
-     */
-    fun byBleName(bleName: String): ToyType {
-        val pretty = LovenseProtocol.prettyModelName(bleName)
-        val token = pretty.lowercase()
-        val hit = byCode.values.firstOrNull { token.startsWith(it.displayName.lowercase()) }
-        return hit ?: generic.copy(displayName = pretty)
+/** A toy model: protocol, brand, display name, actuators. */
+data class ToyType(
+    val protocolId: String,
+    val brand: String,
+    val displayName: String,
+    val actuators: List<Actuator>,
+    val battery: Boolean = false,
+) {
+    /** Only Lovense has been tested on hardware here; the rest is community protocol data. */
+    val experimental: Boolean get() = protocolId != "lovense"
+
+    /** Indices (in [actuators]) of the motion actuators, in order. */
+    val motion: List<Int> get() = actuators.indices.filter { actuators[it].kind.isMotion }
+
+    /** Exactly two vibrators as motion actuators → one-thumb XY pad. */
+    val isDualVibrate: Boolean
+        get() = motion.size == 2 && motion.all { actuators[it].kind == ActuatorKind.VIBRATE }
+
+    companion object {
+        fun from(def: DeviceDefinition, brand: String): ToyType = ToyType(
+            protocolId = def.protocolId,
+            brand = brand,
+            displayName = def.name,
+            actuators = def.features.mapNotNull { it.toActuator() },
+            battery = def.features.any { it.battery },
+        )
+
+        /** Picks the output a feature is driven by (one control per feature). */
+        private fun FeatureDef.toActuator(): Actuator? {
+            val o = output(OutputType.OSCILLATE)
+                ?: output(OutputType.HW_POSITION)
+                ?: output(OutputType.POSITION)
+                ?: outputs.firstOrNull()
+                ?: return null
+            val kind = when (o.type) {
+                OutputType.VIBRATE -> ActuatorKind.VIBRATE
+                OutputType.ROTATE -> ActuatorKind.ROTATE
+                OutputType.OSCILLATE -> ActuatorKind.OSCILLATE
+                OutputType.CONSTRICT -> ActuatorKind.CONSTRICT
+                OutputType.TEMPERATURE -> ActuatorKind.TEMPERATURE
+                OutputType.LED -> ActuatorKind.LED
+                OutputType.SPRAY -> ActuatorKind.SPRAY
+                OutputType.POSITION -> ActuatorKind.POSITION
+                OutputType.HW_POSITION -> ActuatorKind.STROKE
+            }
+            return Actuator(index, kind, o.min, o.max, description)
+        }
     }
 }
