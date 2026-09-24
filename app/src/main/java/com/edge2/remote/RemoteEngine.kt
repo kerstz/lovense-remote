@@ -63,8 +63,8 @@ class RemoteEngine private constructor(context: Context) {
             val f1 = m1 / 20f
             val f2 = m2 / 20f
             val t = _target.value
-            if (t == null) { toyManager.setFractionAll(0, f1); toyManager.setFractionAll(1, f2) }
-            else { toyManager.setFraction(t, 0, f1); toyManager.setFraction(t, 1, f2) }
+            if (t == null) { toyManager.setMotionAll(0, f1); toyManager.setMotionAll(1, f2) }
+            else { toyManager.setMotion(t, 0, f1); toyManager.setMotion(t, 1, f2) }
         }
         override fun stopAll() = toyManager.stopAll()
     }, scope)
@@ -153,7 +153,7 @@ class RemoteEngine private constructor(context: Context) {
         scope.launch { tunnel.hostKeyMismatch.collect { if (it) _tunnelPreparing.value = false } }
         // Toy list pushed to controllers (selector on the web page).
         scope.launch {
-            toys.map { list -> list.map { it.displayName to it.toy.actuators.size } }
+            toys.map { list -> list.map { it.displayName to it.toy.motion.size } }
                 .distinctUntilChanged()
                 .collect { list ->
                     val json = buildJsonObject {
@@ -189,24 +189,23 @@ class RemoteEngine private constructor(context: Context) {
     fun setActuator(address: String, index: Int, fraction: Float) {
         player.cancel()
         toyManager.setFraction(address, index, fraction)
+        // Recording follows the first two motion actuators (pattern m1/m2).
+        val motion = toys.value.firstOrNull { it.address == address }?.toy?.motion.orEmpty()
         val lvl = (fraction.coerceIn(0f, 1f) * 20).roundToInt()
-        if (index == 0) capture(base = lvl) else if (index == 1) capture(shaft = lvl)
+        when (motion.indexOf(index)) { 0 -> capture(base = lvl); 1 -> capture(shaft = lvl) }
     }
 
     fun setXY(address: String, base: Float, shaft: Float) {
         player.cancel()
-        toyManager.setFraction(address, 0, base)
-        toyManager.setFraction(address, 1, shaft)
+        toyManager.setMotion(address, 0, base)
+        toyManager.setMotion(address, 1, shaft)
         capture((base.coerceIn(0f, 1f) * 20).roundToInt(), (shaft.coerceIn(0f, 1f) * 20).roundToInt())
     }
 
-    /** Every actuator of [address] (null = of every toy) to [fraction]. */
+    /** Every motion actuator of [address] (null = of every toy) to [fraction]. */
     fun setAll(address: String?, fraction: Float) {
         player.cancel()
-        if (address == null) toyManager.setAllFraction(fraction)
-        else toys.value.firstOrNull { it.address == address }?.toy?.actuators?.indices?.forEach {
-            toyManager.setFraction(address, it, fraction)
-        }
+        if (address == null) toyManager.setAllFraction(fraction) else toyManager.setAllMotion(address, fraction)
         val lvl = (fraction.coerceIn(0f, 1f) * 20).roundToInt()
         capture(base = lvl, shaft = lvl)
     }
@@ -309,13 +308,12 @@ class RemoteEngine private constructor(context: Context) {
         when (cmd) {
             is RemoteCommand.SetMotor -> {
                 val f = cmd.level / RemoteCommand.MAX_LEVEL.toFloat()
-                if (addr == null) toyManager.setFractionAll(cmd.index - 1, f)
-                else toyManager.setFraction(addr, cmd.index - 1, f)
+                if (addr == null) toyManager.setMotionAll(cmd.index - 1, f)
+                else toyManager.setMotion(addr, cmd.index - 1, f)
             }
             is RemoteCommand.SetBoth -> {
                 val f = cmd.level / RemoteCommand.MAX_LEVEL.toFloat()
-                if (addr == null) toyManager.setAllFraction(f)
-                else list.first { it.address == addr }.toy.actuators.indices.forEach { toyManager.setFraction(addr, it, f) }
+                if (addr == null) toyManager.setAllFraction(f) else toyManager.setAllMotion(addr, f)
             }
             is RemoteCommand.Stop -> if (addr == null) toyManager.stopAll() else toyManager.stop(addr)
         }
