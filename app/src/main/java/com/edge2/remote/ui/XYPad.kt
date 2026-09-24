@@ -31,20 +31,22 @@ import androidx.compose.ui.unit.sp
 import com.edge2.remote.ui.theme.Edge2
 
 /**
- * Pad XY — élément signature du design. Un seul pouce pilote les deux moteurs :
- * axe X (gauche→droite) = BASE, axe Y (bas→haut) = TIGE.
+ * XY pad — the design's signature element. One thumb drives both motors:
+ * X axis (left→right) = motor 1, Y axis (bottom→top) = motor 2.
  *
- * Composant « pur » : il rend le point depuis [base]/[tige] (0..1) et remonte la
- * position brute touchée via [onChange]. Le mode Link (moyenne des deux axes)
- * est géré par l'appelant, qui repasse alors base = tige.
+ * "Pure" component: it draws the dot from [base]/[shaft] (0..1) and reports the
+ * raw touched position through [onChange]. Link mode (average of both axes) is
+ * handled by the caller, which then passes base = shaft.
  */
 @Composable
 fun XYPad(
     base: Float,
-    tige: Float,
-    onChange: (base: Float, tige: Float) -> Unit,
+    shaft: Float,
+    onChange: (base: Float, shaft: Float) -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    xLabel: String = "MOTOR 1 →",
+    yLabel: String = "MOTOR 2 →",
 ) {
     val c = Edge2.colors
     var size by remember { mutableStateOf(IntSize(1, 1)) }
@@ -73,7 +75,7 @@ fun XYPad(
             val w = this.size.width
             val h = this.size.height
 
-            // Grille 4×4.
+            // 4×4 grid.
             val gridColor = if (c.isDark) Color.White.copy(alpha = .035f) else c.ink.copy(alpha = .05f)
             for (i in 1..3) {
                 val gx = w * i / 4f
@@ -82,25 +84,25 @@ fun XYPad(
                 drawLine(gridColor, Offset(0f, gy), Offset(w, gy), 1f)
             }
 
-            // Lavis dégradé : base (violet) depuis la gauche, tige (rose) depuis le bas.
+            // Gradient wash: motor 1 (violet) from the left, motor 2 (pink) from the bottom.
             drawRect(Brush.horizontalGradient(
                 0f to c.base.copy(alpha = .10f), .55f to Color.Transparent,
                 startX = 0f, endX = w,
             ))
             drawRect(Brush.verticalGradient(
-                0f to Color.Transparent, .45f to Color.Transparent, 1f to c.tige.copy(alpha = .10f),
+                0f to Color.Transparent, .45f to Color.Transparent, 1f to c.shaft.copy(alpha = .10f),
                 startY = 0f, endY = h,
             ))
 
-            // Position du point.
+            // Dot position.
             val px = (base.coerceIn(0f, 1f)) * w
-            val py = (1f - tige.coerceIn(0f, 1f)) * h
+            val py = (1f - shaft.coerceIn(0f, 1f)) * h
 
-            // Crosshairs suiveurs.
+            // Following crosshairs.
             drawLine(c.base.copy(alpha = .45f), Offset(px, 0f), Offset(px, h), 1.5.dp.toPx())
-            drawLine(c.tige.copy(alpha = .45f), Offset(0f, py), Offset(w, py), 1.5.dp.toPx())
+            drawLine(c.shaft.copy(alpha = .45f), Offset(0f, py), Offset(w, py), 1.5.dp.toPx())
 
-            // Halo + point lumineux.
+            // Halo + glowing dot.
             val r = 17.dp.toPx()
             drawCircle(
                 Brush.radialGradient(
@@ -119,9 +121,9 @@ fun XYPad(
             drawCircle(Color.White, radius = r, center = Offset(px, py), style = androidx.compose.ui.graphics.drawscope.Stroke(2.dp.toPx()))
         }
 
-        // Libellés d'axe.
+        // Axis labels.
         Text(
-            "BASE →",
+            xLabel,
             color = c.base.copy(alpha = .75f),
             fontWeight = FontWeight.SemiBold,
             fontSize = 9.sp,
@@ -129,8 +131,8 @@ fun XYPad(
             modifier = Modifier.align(Alignment.BottomStart).padding(start = 10.dp, bottom = 9.dp),
         )
         Text(
-            "TIGE →",
-            color = c.tige.copy(alpha = .75f),
+            yLabel,
+            color = c.shaft.copy(alpha = .75f),
             fontWeight = FontWeight.SemiBold,
             fontSize = 9.sp,
             letterSpacing = 2.sp,

@@ -1,170 +1,219 @@
 package com.edge2.remote
 
 import android.content.Context
-import com.edge2.remote.ble.ConnectionState
 import com.edge2.remote.ble.DiscoveredToy
-import com.edge2.remote.ble.Edge2BleManager
+import com.edge2.remote.ble.ToyManager
+import com.edge2.remote.ble.ToyStatus
 import com.edge2.remote.pattern.LovenseImporter
 import com.edge2.remote.pattern.Pattern
 import com.edge2.remote.pattern.PatternPlayer
+import com.edge2.remote.pattern.PatternSink
 import com.edge2.remote.pattern.PatternStep
-import kotlin.math.roundToInt
+import com.edge2.remote.remote.ControllerInfo
 import com.edge2.remote.remote.NetworkUtils
 import com.edge2.remote.remote.RemoteCommand
 import com.edge2.remote.remote.RemoteServer
 import com.edge2.remote.remote.SshTunnel
 import com.edge2.remote.service.AppActions
 import com.edge2.remote.service.RemoteForegroundService
+import kotlin.math.roundToInt
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonArray
+import kotlinx.serialization.json.addJsonObject
+
+/** Why sharing failed (shown in the share dialog). */
+enum class ShareError { NONE, BLOCKED, LOCKED }
 
 /**
- * Cœur de l'app au **scope processus** (pas lié à l'Activity) : détient le BLE,
- * le lecteur de patterns, le serveur de partage et le tunnel, plus l'état exposé
- * à l'UI. Maintenu vivant par [RemoteForegroundService] tant qu'une session est
- * active → le contrôle survit à la fermeture de l'app (retour / balayage).
+ * The app's **process-scoped** core (not tied to the Activity): owns the toys
+ * (multi-brand, several at once), the pattern player, the sharing server and
+ * the tunnel, plus the state exposed to the UI. Kept alive by
+ * [RemoteForegroundService] while a session is active → control survives the
+ * app being closed.
  *
- * [RemoteViewModel] n'est qu'un adaptateur mince au-dessus de ce singleton.
+ * [RemoteViewModel] is just a thin adapter on top of this singleton.
  */
 class RemoteEngine private constructor(context: Context) {
 
     private val appContext = context.applicationContext
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
-    private val ble = Edge2BleManager(appContext)
-    private val player = PatternPlayer(ble, scope)
+    private val toyManager = ToyManager(appContext)
+
+    /** Toy targeted by patterns / global presets: address, or null = all. */
+    private val _target = MutableStateFlow<String?>(null)
+    val target: StateFlow<String?> = _target.asStateFlow()
+
+    private val player = PatternPlayer(object : PatternSink {
+        override fun apply(m1: Int, m2: Int) {
+            val f1 = m1 / 20f
+            val f2 = m2 / 20f
+            val t = _target.value
+            if (t == null) { toyManager.setFractionAll(0, f1); toyManager.setFractionAll(1, f2) }
+            else { toyManager.setFraction(t, 0, f1); toyManager.setFraction(t, 1, f2) }
+        }
+        override fun stopAll() = toyManager.stopAll()
+    }, scope)
+
     private val importer = LovenseImporter()
-    private val server = RemoteServer(appContext.assets) { cmd -> applyRemote(cmd) }
+    private val server = RemoteServer(
+        appContext.assets,
+        onCommand = { _, cmd -> applyRemote(cmd) },
+        onLockout = { scope.launch { stopSharing(); _shareError.value = ShareError.LOCKED } },
+    )
     private val tunnel = SshTunnel(appContext, scope)
 
-    // --- État exposé -----------------------------------------------------
-    val connectionState = ble.connectionState
-    val actuatorLevels = ble.actuatorLevels
-    val discovered = ble.discovered
+    // --- Exposed state ---------------------------------------------------
+    val toys: StateFlow<List<ToyStatus>> = toyManager.toys
+    val discovered = toyManager.discovered
+    val scanState = toyManager.scanState
     val playing: StateFlow<String?> = player.playing
 
-    /** Nombre de contrôleurs distants connectés (>0 = « on te contrôle »). */
-    val controllers: StateFlow<Int> = server.controllers
+    /** Authenticated remote controllers (approved or pending approval). */
+    val controllers: StateFlow<List<ControllerInfo>> = server.controllers
 
     private val _linkMode = MutableStateFlow(false)
     val linkMode: StateFlow<Boolean> = _linkMode.asStateFlow()
 
-    /** Partage actif (serveur embarqué démarré) — pilote le service premier-plan. */
+    /** Sharing active (embedded server started) — drives the foreground service. */
     private val _sharing = MutableStateFlow(false)
     val sharing: StateFlow<Boolean> = _sharing.asStateFlow()
 
-    /** Code PIN du partage en cours (à communiquer au contrôleur), ou null. */
+    /** PIN of the current share (to give the controller, separately from the link), or null. */
     private val _pin = MutableStateFlow<String?>(null)
     val pin: StateFlow<String?> = _pin.asStateFlow()
 
-    /** L'hôte a-t-il accepté que le contrôleur prenne la main ? (gate des commandes) */
-    private val _approved = MutableStateFlow(false)
-    val approved: StateFlow<Boolean> = _approved.asStateFlow()
-
-    private var expiryJob: kotlinx.coroutines.Job? = null
+    private var expiryJob: Job? = null
 
     private val _shareUrl = MutableStateFlow<String?>(null)
     val shareUrl: StateFlow<String?> = _shareUrl.asStateFlow()
 
-    /** URL internet (trycloudflare) prête, ou null. */
+    /** Internet URL (localhost.run) once ready, or null. */
     private val _tunnelUrl = MutableStateFlow<String?>(null)
     val tunnelUrl: StateFlow<String?> = _tunnelUrl.asStateFlow()
 
-    /** true = lien internet prêt ; false pendant la préparation cloudflared. */
-    private val _tunnelConnected = MutableStateFlow(false)
-    val tunnelConnected: StateFlow<Boolean> = _tunnelConnected.asStateFlow()
-
-    /** true tant que le tunnel internet se prépare (URL pas encore prête). */
+    /** true while the internet tunnel is being set up (URL not ready yet). */
     private val _tunnelPreparing = MutableStateFlow(false)
     val tunnelPreparing: StateFlow<Boolean> = _tunnelPreparing.asStateFlow()
 
-    /** true si le partage a échoué (réseau bloqué pour l'app). */
-    private val _shareError = MutableStateFlow(false)
-    val shareError: StateFlow<Boolean> = _shareError.asStateFlow()
+    /** The relay host key changed → tunnel refused (possible interception). */
+    val tunnelHostKeyMismatch: StateFlow<Boolean> = tunnel.hostKeyMismatch
+
+    private val _shareError = MutableStateFlow(ShareError.NONE)
+    val shareError: StateFlow<ShareError> = _shareError.asStateFlow()
 
     private val _importedPatterns = MutableStateFlow<List<Pattern>>(emptyList())
     val importedPatterns: StateFlow<List<Pattern>> = _importedPatterns.asStateFlow()
 
-    // --- Enregistrement de pattern (perform → save) ----------------------
+    // --- Pattern recording (perform → save) -----------------------------
     private val _recording = MutableStateFlow(false)
     val recording: StateFlow<Boolean> = _recording.asStateFlow()
     private var recStart = 0L
     private val recBuf = mutableListOf<Triple<Long, Int, Int>>()
     private var lastBase = 0
-    private var lastTige = 0
+    private var lastShaft = 0
 
     init {
-        // Bouton « Couper » de la notification.
-        AppActions.onStop = { stopSharing(); disconnect() }
-        // Service premier-plan actif tant qu'on est connecté OU en partage :
-        // garde le processus (BLE + serveur + tunnel) vivant en arrière-plan
-        // et même après fermeture de l'app.
+        // Notification "Disconnect" button: stops sharing + every toy.
+        AppActions.onStop = { stopSharing(); disconnectAll() }
+        // Foreground service active while a toy is managed OR sharing is on.
         scope.launch {
-            combine(connectionState, _sharing) { st, sharing ->
-                st is ConnectionState.Connected || sharing
-            }.collect { active ->
-                if (active) RemoteForegroundService.start(appContext, currentName())
+            combine(toys, _sharing) { list, sharing ->
+                if (list.isEmpty() && !sharing) null else list.joinToString(" · ") { it.displayName }.ifEmpty { "Remote" }
+            }.distinctUntilChanged().collect { name ->
+                if (name != null) RemoteForegroundService.start(appContext, name)
                 else RemoteForegroundService.stop(appContext)
             }
         }
-        // Quand le tunnel publie l'URL publique → lien internet prêt.
+        // Tunnel ready → internet link.
         scope.launch {
             tunnel.publicUrl.collect { url ->
                 if (url != null && _sharing.value) {
                     _tunnelUrl.value = "$url/s/${server.sessionId}"
-                    _tunnelConnected.value = true
                     _tunnelPreparing.value = false
                 } else {
                     _tunnelUrl.value = null
-                    _tunnelConnected.value = false
                 }
             }
         }
+        scope.launch { tunnel.hostKeyMismatch.collect { if (it) _tunnelPreparing.value = false } }
+        // Toy list pushed to controllers (selector on the web page).
+        scope.launch {
+            toys.map { list -> list.map { it.displayName to it.toy.actuators.size } }
+                .distinctUntilChanged()
+                .collect { list ->
+                    val json = buildJsonObject {
+                        putJsonArray("toys") {
+                            list.forEach { (name, n) -> addJsonObject { put("name", name); put("acts", n) } }
+                        }
+                    }
+                    server.pushState(json.toString())
+                }
+        }
+        // Target gone (toy removed) → back to "all".
+        scope.launch {
+            toys.collect { list -> _target.update { t -> t?.takeIf { a -> list.any { it.address == a } } } }
+        }
     }
 
-    private fun currentName(): String =
-        (connectionState.value as? ConnectionState.Connected)?.deviceName ?: "Lovense"
+    // --- Toys ------------------------------------------------------------
 
-    // --- Actions ---------------------------------------------------------
-
-    fun scan() = ble.startDiscovery()
-    fun connectTo(toy: DiscoveredToy) = ble.connectTo(toy)
-    fun disconnect() = ble.disconnect()
+    fun scan() = toyManager.startDiscovery()
+    fun stopScan() = toyManager.stopDiscovery()
+    fun connectTo(toy: DiscoveredToy) = toyManager.connectTo(toy)
+    fun disconnect(address: String) = toyManager.disconnect(address)
+    fun disconnectAll() { player.cancel(); toyManager.disconnectAll() }
+    fun selectTarget(address: String?) { _target.value = address }
     fun toggleLink() { _linkMode.value = !_linkMode.value }
-    fun reverse(index: Int) = ble.reverse(index)
+    fun reverse(address: String, index: Int) = toyManager.reverse(address, index)
     fun playPattern(pattern: Pattern) = player.play(pattern)
     fun playTease() = player.playTease()
-    fun stopAll() = player.stop()
 
-    fun setActuator(index: Int, fraction: Float) {
+    /** Global STOP: cancels any pattern and stops EVERY toy. */
+    fun stopAll() { player.cancel(); toyManager.stopAll() }
+
+    fun setActuator(address: String, index: Int, fraction: Float) {
         player.cancel()
-        ble.setActuatorFraction(index, fraction)
+        toyManager.setFraction(address, index, fraction)
         val lvl = (fraction.coerceIn(0f, 1f) * 20).roundToInt()
-        if (index == 0) capture(base = lvl) else if (index == 1) capture(tige = lvl)
+        if (index == 0) capture(base = lvl) else if (index == 1) capture(shaft = lvl)
     }
 
-    fun setBoth(fraction: Float) {
+    fun setXY(address: String, base: Float, shaft: Float) {
         player.cancel()
-        ble.setAllFraction(fraction)
+        toyManager.setFraction(address, 0, base)
+        toyManager.setFraction(address, 1, shaft)
+        capture((base.coerceIn(0f, 1f) * 20).roundToInt(), (shaft.coerceIn(0f, 1f) * 20).roundToInt())
+    }
+
+    /** Every actuator of [address] (null = of every toy) to [fraction]. */
+    fun setAll(address: String?, fraction: Float) {
+        player.cancel()
+        if (address == null) toyManager.setAllFraction(fraction)
+        else toys.value.firstOrNull { it.address == address }?.toy?.actuators?.indices?.forEach {
+            toyManager.setFraction(address, it, fraction)
+        }
         val lvl = (fraction.coerceIn(0f, 1f) * 20).roundToInt()
-        capture(base = lvl, tige = lvl)
+        capture(base = lvl, shaft = lvl)
     }
 
-    fun setXY(base: Float, tige: Float) {
-        player.cancel()
-        ble.setActuatorFraction(0, base)
-        ble.setActuatorFraction(1, tige)
-        capture((base.coerceIn(0f, 1f) * 20).roundToInt(), (tige.coerceIn(0f, 1f) * 20).roundToInt())
-    }
+    // --- Recording -------------------------------------------------------
 
-    /** Démarre l'enregistrement : tes gestes deviennent un pattern. */
+    /** Starts recording: your gestures become a pattern. */
     fun startRecording() {
         recBuf.clear()
         recStart = System.currentTimeMillis()
@@ -172,7 +221,7 @@ class RemoteEngine private constructor(context: Context) {
         capture()
     }
 
-    /** Arrête l'enregistrement et sauve le pattern (≥ 2 points). */
+    /** Stops recording and saves the pattern (≥ 2 points). */
     fun stopRecording() {
         _recording.value = false
         if (recBuf.size < 2) return
@@ -180,60 +229,63 @@ class RemoteEngine private constructor(context: Context) {
             PatternStep(m1 = a.second, m2 = a.third, durationMs = (b.first - a.first).coerceIn(50, 5000))
         }
         if (steps.isEmpty()) return
-        val n = _importedPatterns.value.count { it.name.startsWith("Perso") } + 1
-        _importedPatterns.update { it + Pattern(name = "Perso $n", steps = steps, loop = true) }
+        val n = _importedPatterns.value.count { it.name.startsWith("Custom") } + 1
+        _importedPatterns.update { it + Pattern(name = "Custom $n", steps = steps, loop = true) }
         recBuf.clear()
     }
 
-    private fun capture(base: Int? = null, tige: Int? = null) {
+    private fun capture(base: Int? = null, shaft: Int? = null) {
         if (base != null) lastBase = base
-        if (tige != null) lastTige = tige
-        if (_recording.value) recBuf.add(Triple(System.currentTimeMillis() - recStart, lastBase, lastTige))
+        if (shaft != null) lastShaft = shaft
+        // Memory bound: ~1 h of dense gestures.
+        if (_recording.value && recBuf.size < 20_000) {
+            recBuf.add(Triple(System.currentTimeMillis() - recStart, lastBase, lastShaft))
+        }
     }
 
+    // --- Sharing ---------------------------------------------------------
+
     fun startSharing() {
-        // Code PIN obligatoire (4 chiffres) — à dire au contrôleur, hors du lien.
-        val code = "%04d".format(kotlin.random.Random.nextInt(10000))
-        server.pin = code
-        // Réseau bloqué (pare-feu / autorisation coupée) → on n'amorce rien (pas de crash).
-        if (!server.start()) { _shareError.value = true; return }
-        _shareError.value = false
-        _pin.value = code
-        _approved.value = false
-        _sharing.value = true
-        // LAN (Wi-Fi/Ethernet seulement ; null en 4G).
+        if (_sharing.value) return
+        _shareError.value = ShareError.NONE
+        // LAN: Wi-Fi/Ethernet only (null on 4G) → the server listens ONLY there + 127.0.0.1.
         val ip = NetworkUtils.lanIpv4()
+        if (!server.start(ip)) { _shareError.value = ShareError.BLOCKED; return }
+        _pin.value = server.pin
+        _sharing.value = true
         _shareUrl.value = ip?.let { "http://$it:${server.port}/s/${server.sessionId}" }
-        // Tunnel internet (SSH/localhost.run) → marche en 4G. URL prête en quelques s.
-        if (tunnel.available) {
+        // Internet tunnel (SSH/localhost.run) → works over 4G. URL ready in a few seconds.
+        if (!tunnel.hostKeyMismatch.value) {
             _tunnelPreparing.value = true
             tunnel.start(server.port)
         }
-        // Expiration auto : coupe l'accès après 30 min.
+        // Auto-expiry: cuts access after 30 min.
         expiryJob?.cancel()
-        expiryJob = scope.launch { kotlinx.coroutines.delay(30 * 60_000L); stopSharing() }
+        expiryJob = scope.launch { delay(30 * 60_000L); stopSharing() }
     }
 
-    /** L'hôte accepte que le contrôleur prenne la main. */
-    fun approveControl() { _approved.value = true }
+    /** The host approves controller [id]. */
+    fun approveController(id: Int) = server.approve(id)
 
-    /** L'hôte refuse → coupe l'accès (arrête le partage). */
-    fun refuseControl() = stopSharing()
+    /** The host refuses / kicks controller [id] (sharing continues for the others). */
+    fun refuseController(id: Int) = server.kick(id)
+
+    /** After a legitimate relay key change, the user re-accepts it. */
+    fun trustNewRelayKey() {
+        tunnel.trustNewHostKey()
+        if (_sharing.value) { _tunnelPreparing.value = true; tunnel.start(server.port) }
+    }
 
     fun stopSharing() {
         expiryJob?.cancel()
         expiryJob = null
         tunnel.stop()
         server.stop()
-        server.pin = null
         _sharing.value = false
         _pin.value = null
-        _approved.value = false
         _shareUrl.value = null
         _tunnelUrl.value = null
-        _tunnelConnected.value = false
         _tunnelPreparing.value = false
-        _shareError.value = false
     }
 
     fun importFromUrl(url: String) {
@@ -246,15 +298,26 @@ class RemoteEngine private constructor(context: Context) {
         importer.fromText(content.trim())?.let { p -> _importedPatterns.update { it + p } }
     }
 
-    /** Commande reçue d'un contrôleur distant ; M1/M2 → actionneurs 0/1. */
+    /**
+     * Command from an APPROVED remote controller (the server filters the others).
+     * Shared 0..20 scale → fraction, applied to each toy's own range.
+     */
     private fun applyRemote(cmd: RemoteCommand) {
-        // Gate : tant que l'hôte n'a pas accepté, on ignore les commandes distantes.
-        if (!_approved.value) return
+        val list = toys.value
+        val addr: String? = cmd.target?.let { i -> list.getOrNull(i)?.address ?: return }
         player.cancel()
         when (cmd) {
-            is RemoteCommand.SetMotor -> ble.setActuator(cmd.index - 1, cmd.level)
-            is RemoteCommand.SetBoth -> { ble.setActuator(0, cmd.level); ble.setActuator(1, cmd.level) }
-            RemoteCommand.Stop -> ble.stopAll()
+            is RemoteCommand.SetMotor -> {
+                val f = cmd.level / RemoteCommand.MAX_LEVEL.toFloat()
+                if (addr == null) toyManager.setFractionAll(cmd.index - 1, f)
+                else toyManager.setFraction(addr, cmd.index - 1, f)
+            }
+            is RemoteCommand.SetBoth -> {
+                val f = cmd.level / RemoteCommand.MAX_LEVEL.toFloat()
+                if (addr == null) toyManager.setAllFraction(f)
+                else list.first { it.address == addr }.toy.actuators.indices.forEach { toyManager.setFraction(addr, it, f) }
+            }
+            is RemoteCommand.Stop -> if (addr == null) toyManager.stopAll() else toyManager.stop(addr)
         }
     }
 
@@ -262,7 +325,7 @@ class RemoteEngine private constructor(context: Context) {
         @Volatile
         private var instance: RemoteEngine? = null
 
-        /** Singleton processus : créé une seule fois, survit aux Activity/ViewModel. */
+        /** Process singleton: created once, outlives Activities/ViewModels. */
         fun get(context: Context): RemoteEngine =
             instance ?: synchronized(this) {
                 instance ?: RemoteEngine(context).also { instance = it }

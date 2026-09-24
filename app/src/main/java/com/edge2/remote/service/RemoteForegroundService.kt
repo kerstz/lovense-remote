@@ -16,12 +16,12 @@ import com.edge2.remote.MainActivity
 import com.edge2.remote.R
 
 /**
- * Service premier-plan « appareil connecté » : maintient le processus en
- * importance premier-plan tant qu'un toy est connecté, pour que le BLE et le
- * partage survivent en arrière-plan (utile aussi sous GrapheneOS, plus strict).
- * Affiche une notification persistante avec un bouton « Couper » → [AppActions].
+ * "Connected device" foreground service: keeps the process at foreground
+ * importance while a toy is connected, so BLE and sharing survive in the
+ * background (also needed on the stricter GrapheneOS).
+ * Shows a persistent notification with a "Disconnect" button → [AppActions].
  *
- * 100 % AOSP : NotificationManager + Service standard, aucune dépendance Google.
+ * 100% AOSP: standard NotificationManager + Service, no Google dependency.
  */
 class RemoteForegroundService : Service() {
 
@@ -33,10 +33,10 @@ class RemoteForegroundService : Service() {
             stopSelf()
             return START_NOT_STICKY
         }
-        goForeground(intent?.getStringExtra(EXTRA_NAME) ?: "Lovense")
-        // NOT_STICKY : si le process meurt, la connexion BLE est perdue de toute
-        // façon → inutile de relancer le service à vide. Tant que le process vit
-        // (maintenu par ce service), il survit au balayage de l'app.
+        goForeground(intent?.getStringExtra(EXTRA_NAME) ?: "Remote")
+        // NOT_STICKY: if the process dies, the BLE link is lost anyway → no point
+        // restarting an empty service. While the process lives (kept alive by
+        // this service), it survives the app being swiped away.
         return START_NOT_STICKY
     }
 
@@ -82,13 +82,13 @@ class RemoteForegroundService : Service() {
         private const val EXTRA_NAME = "name"
         const val ACTION_STOP = "com.edge2.remote.action.STOP"
 
-        /** Démarre/maj le service avec le nom du toy connecté. */
+        /** Starts/updates the service with the connected toys' names. */
         fun start(context: Context, name: String) {
             val i = Intent(context, RemoteForegroundService::class.java).putExtra(EXTRA_NAME, name)
             ContextCompat.startForegroundService(context, i)
         }
 
-        /** Arrête le service (toy déconnecté). */
+        /** Stops the service (no toy, no sharing). */
         fun stop(context: Context) {
             context.stopService(Intent(context, RemoteForegroundService::class.java))
         }

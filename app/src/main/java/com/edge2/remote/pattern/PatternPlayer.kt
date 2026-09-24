@@ -1,6 +1,5 @@
 package com.edge2.remote.pattern
 
-import com.edge2.remote.ble.Edge2BleManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -11,15 +10,21 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlin.random.Random
 
+/** Destination of a pattern's levels (m1/m2 on the 0..20 scale). */
+interface PatternSink {
+    fun apply(m1: Int, m2: Int)
+    fun stopAll()
+}
+
 /**
- * Joue un [Pattern] en envoyant les intensités au toy via [Edge2BleManager],
- * éventuellement en boucle. Une seule lecture à la fois.
+ * Plays a [Pattern] by sending its intensities to the toys through [sink],
+ * optionally looping. One playback at a time.
  */
 class PatternPlayer(
-    private val ble: Edge2BleManager,
+    private val sink: PatternSink,
     private val scope: CoroutineScope,
 ) {
-    /** Nom du pattern en cours de lecture, ou null si arrêté. */
+    /** Name of the pattern being played, or null when stopped. */
     private val _playing = MutableStateFlow<String?>(null)
     val playing: StateFlow<String?> = _playing.asStateFlow()
 
@@ -33,50 +38,49 @@ class PatternPlayer(
             do {
                 for (step in pattern.steps) {
                     if (!isActive) break
-                    // m1/m2 → actionneurs 0/1 (ignoré si le toy en a moins).
-                    ble.setActuator(0, step.m1)
-                    ble.setActuator(1, step.m2)
+                    // m1/m2 → actuators 0/1 (ignored if the toy has fewer).
+                    sink.apply(step.m1, step.m2)
                     delay(step.durationMs.coerceAtLeast(10))
                 }
             } while (pattern.loop && isActive)
             _playing.value = null
-            ble.stopAll()
+            sink.stopAll()
         }
     }
 
     /**
-     * Mode Tease : intensités aléatoires avec pauses surprises et montées
-     * progressives — jamais deux fois pareil. Tourne jusqu'à [stop].
+     * Tease mode: random intensities with surprise pauses and progressive
+     * build-ups — never the same twice. Runs until [stop].
      */
     fun playTease() {
         cancelJob()
         _playing.value = TEASE
         job = scope.launch {
-            var ceiling = 8 // plafond qui monte au fil du temps
+            var ceiling = 8 // ceiling that rises over time
             while (isActive) {
                 if (Random.nextInt(6) == 0) {
-                    // Pause taquine.
-                    ble.setActuator(0, 0); ble.setActuator(1, 0)
+                    // Teasing pause.
+                    sink.apply(0, 0)
                     delay(Random.nextLong(400, 1400))
                 } else {
                     val a = Random.nextInt(4, ceiling.coerceAtMost(20) + 1)
                     val b = if (Random.nextBoolean()) a else Random.nextInt(4, ceiling.coerceAtMost(20) + 1)
-                    ble.setActuator(0, a); ble.setActuator(1, b)
+                    sink.apply(a, b)
                     delay(Random.nextLong(250, 1100))
                 }
                 if (ceiling < 20) ceiling++
             }
-            ble.stopAll()
+            sink.stopAll()
         }
     }
 
-    /** Stoppe la lecture ET coupe les moteurs. */
+    /** Stops playback AND the motors. */
     fun stop() {
         cancelJob()
-        ble.stopAll()
+        sink.stopAll()
     }
 
-    /** Annule la lecture SANS couper les moteurs (reprise manuelle immédiate). */
+    /** Cancels playback WITHOUT stopping the motors (instant manual takeover). */
     fun cancel() {
         cancelJob()
     }
@@ -88,7 +92,7 @@ class PatternPlayer(
     }
 
     companion object {
-        /** Nom interne du mode Tease (procédural, pas un [Pattern]). */
+        /** Internal name of Tease mode (procedural, not a [Pattern]). */
         const val TEASE = "Tease"
     }
 }

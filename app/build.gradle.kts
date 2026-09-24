@@ -1,3 +1,5 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -13,20 +15,20 @@ android {
         applicationId = "com.edge2.remote"
         minSdk = 26
         targetSdk = 35
-        versionCode = 2
-        versionName = "0.1.1"
+        versionCode = 3
+        versionName = "0.2.0"
         vectorDrawables { useSupportLibrary = true }
     }
 
     dependenciesInfo {
-        // Désactive les métadonnées de dépendances dans l'APK.
+        // Disables dependency metadata in the APK.
         includeInApk = false
-        // Désactive les métadonnées de dépendances dans l'App Bundle.
+        // Disables dependency metadata in the App Bundle.
         includeInBundle = false
     }
 
-    // Signature release : clé fournie par l'environnement (CI). Absente (build
-    // F-Droid) → signingConfig nul, F-Droid signe avec sa propre clé.
+    // Release signing: key provided by the environment (CI). Absent (F-Droid
+    // build) → null signingConfig, F-Droid signs with its own key.
     val ksPath: String? = System.getenv("SIGNING_KEYSTORE_FILE")?.takeIf { it.isNotBlank() }
     val ksPresent = ksPath != null && file(ksPath).exists()
     signingConfigs {
@@ -55,8 +57,9 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    kotlinOptions { jvmTarget = "17" }
     buildFeatures { compose = true }
+    // JVM tests: android.jar stubs return default values instead of throwing.
+    testOptions { unitTests.isReturnDefaultValues = true }
 
     packaging {
         resources {
@@ -65,7 +68,7 @@ android {
                 "META-INF/io.netty.versions.properties",
                 "META-INF/*.kotlin_module",
                 "META-INF/{AL2.0,LGPL2.1}",
-                // Signatures BouncyCastle (sshj) — évite les conflits de packaging.
+                // BouncyCastle signatures (sshj) — avoids packaging conflicts.
                 "META-INF/BC*.SF",
                 "META-INF/BC*.DSA",
                 "META-INF/BC*.RSA",
@@ -73,6 +76,11 @@ android {
             )
         }
     }
+}
+
+// Kotlin 2.2+: the `kotlinOptions` DSL is deprecated → `compilerOptions`.
+kotlin {
+    compilerOptions { jvmTarget.set(JvmTarget.JVM_17) }
 }
 
 dependencies {
@@ -84,17 +92,20 @@ dependencies {
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.serialization.json)
 
-    // Phase 4 — serveur embarqué + client de contrôle à distance.
+    // Embedded server + remote-control client.
     implementation(libs.ktor.server.core)
     implementation(libs.ktor.server.cio)
     implementation(libs.ktor.server.websockets)
     implementation(libs.ktor.client.cio)
     implementation(libs.ktor.client.websockets)
     implementation(libs.zxing.core)
-    // Tunnel internet par SSH (localhost.run) — stack JVM → DNS Android OK (4G).
+    // Internet tunnel over SSH (localhost.run) — JVM stack → Android DNS works (4G).
     implementation(libs.sshj)
-    implementation(libs.bcprov) // BouncyCastle complet (X25519 pour le KEX SSH)
-    implementation(libs.slf4j.simple) // logs sshj → logcat (diagnostic)
+    implementation(libs.bcprov) // Full BouncyCastle (X25519 for the SSH key exchange)
+    // sshj pulls bcpkix/bcutil 1.84 (CVE-2026-71889, CVE-2026-8763…) → forced to 1.86.
+    implementation(libs.bcpkix)
+    implementation(libs.bcutil)
+    implementation(libs.slf4j.simple) // sshj logs → logcat (diagnostics)
 
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.ui)
@@ -102,4 +113,6 @@ dependencies {
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
     debugImplementation(libs.androidx.ui.tooling)
+
+    testImplementation(libs.junit)
 }

@@ -4,11 +4,11 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 
 /**
- * Palette identité Edge2 (issue du design `Edge2 Remote.dc.html`).
+ * Edge2 brand palette (from the `Edge2 Remote.dc.html` design).
  *
- * Signature = dégradé violet→rose [gradStart]→[gradEnd]. Chaque moteur a son
- * accent : [base] violet, [tige] rose. [live] = vert « connecté ». On ne passe
- * PAS par les couleurs dynamiques Material : l'identité de marque est fixe.
+ * Signature = violet→pink gradient [gradStart]→[gradEnd]. Each motor has its
+ * accent: [base] violet, [shaft] pink. [live] = "connected" green. Material
+ * dynamic colours are NOT used: the brand identity is fixed.
  */
 data class Edge2Colors(
     val isDark: Boolean,
@@ -20,7 +20,7 @@ data class Edge2Colors(
     val muted: Color,
     val faint: Color,
     val base: Color,
-    val tige: Color,
+    val shaft: Color,
     val live: Color,
     val gradStart: Color,
     val gradEnd: Color,
@@ -38,7 +38,7 @@ val Edge2Dark = Edge2Colors(
     muted = Color(0xFF8A8A97),
     faint = Color(0xFF6E6E7A),
     base = Color(0xFFA98BFF),
-    tige = Color(0xFFFF8BA1),
+    shaft = Color(0xFFFF8BA1),
     live = Color(0xFF46E0A0),
     gradStart = Color(0xFF8B6BFF),
     gradEnd = Color(0xFFFF5C7A),
@@ -56,7 +56,7 @@ val Edge2Light = Edge2Colors(
     muted = Color(0xFF76747E),
     faint = Color(0xFFA6A4B0),
     base = Color(0xFF6D4DF2),
-    tige = Color(0xFFF0436A),
+    shaft = Color(0xFFF0436A),
     live = Color(0xFF1FB877),
     gradStart = Color(0xFF8B6BFF),
     gradEnd = Color(0xFFFF5C7A),

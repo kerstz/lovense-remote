@@ -9,12 +9,12 @@ import androidx.compose.ui.text.font.FontVariation
 import androidx.compose.ui.text.font.FontWeight
 import com.edge2.remote.R
 
-/** Poids d'une police variable (TTF `[wght]`) — supporté API 26+. */
+/** Weight of a variable font (TTF `[wght]`) — supported on API 26+. */
 @OptIn(ExperimentalTextApi::class)
 private fun variableFont(resId: Int, weight: FontWeight, axis: Int) =
     Font(resId, weight = weight, variationSettings = FontVariation.Settings(FontVariation.weight(axis)))
 
-/** Space Grotesk — display + corps. Caractère géométrique, signature du design. */
+/** Space Grotesk — display + body. Geometric character, the design's signature. */
 val SpaceGrotesk = FontFamily(
     variableFont(R.font.space_grotesk, FontWeight.Normal, 400),
     variableFont(R.font.space_grotesk, FontWeight.Medium, 500),
@@ -22,7 +22,7 @@ val SpaceGrotesk = FontFamily(
     variableFont(R.font.space_grotesk, FontWeight.Bold, 700),
 )
 
-/** JetBrains Mono — données chiffrées (batterie, %, latence, ID appareil). */
+/** JetBrains Mono — numeric data (battery, %, latency, device ID). */
 val JetBrainsMono = FontFamily(
     variableFont(R.font.jetbrains_mono, FontWeight.Medium, 500),
     variableFont(R.font.jetbrains_mono, FontWeight.Bold, 700),
@@ -48,5 +48,5 @@ private fun Typography.withFamily(f: FontFamily) = copy(
 
 val Edge2Typography: Typography = Typography().withFamily(SpaceGrotesk)
 
-/** Style mono prêt à l'emploi pour les valeurs chiffrées. */
+/** Ready-to-use mono style for numeric values. */
 val MonoNumber = TextStyle(fontFamily = JetBrainsMono, fontWeight = FontWeight.Bold)

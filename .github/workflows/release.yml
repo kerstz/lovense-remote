@@ -1,8 +1,8 @@
 name: Release APK
 
-# Build et signe l'APK release à chaque tag v*, et l'attache à la GitHub Release.
-# Secrets requis (Settings → Secrets → Actions) :
-#   SIGNING_KEYSTORE_BASE64  = base64 d'un keystore .jks (base64 -w0 keystore.jks)
+# Builds and signs the release APK on every v* tag and attaches it to the GitHub Release.
+# Required secrets (Settings → Secrets → Actions):
+#   SIGNING_KEYSTORE_BASE64  = base64 of a .jks keystore (base64 -w0 keystore.jks)
 #   SIGNING_STORE_PASSWORD, SIGNING_KEY_ALIAS, SIGNING_KEY_PASSWORD
 
 on:

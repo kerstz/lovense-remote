@@ -3,10 +3,10 @@ package com.edge2.remote.pattern
 import kotlinx.serialization.Serializable
 
 /**
- * Une étape de pattern : intensités cibles des deux moteurs maintenues
- * pendant [durationMs] millisecondes.
+ * One pattern step: target intensities of the two motors, held for
+ * [durationMs] milliseconds.
  *
- * [m1] = moteur 1 (`Vibrate1`), [m2] = moteur 2 (`Vibrate2`), tous deux 0..20.
+ * [m1] = actuator 1, [m2] = actuator 2, both on the shared 0..20 scale.
  */
 @Serializable
 data class PatternStep(
@@ -16,12 +16,12 @@ data class PatternStep(
 )
 
 /**
- * Un pattern = nom + séquence d'étapes, jouable en boucle.
+ * A pattern = a name + a sequence of steps, optionally looped.
  *
- * Format JSON simple, sérialisable/partageable (cf. [PatternIO]). Exemple :
+ * Simple JSON format, serializable/shareable (see [PatternIO]). Example:
  * ```json
  * {
- *   "name": "Vague",
+ *   "name": "Wave",
  *   "loop": true,
  *   "steps": [
  *     { "m1": 0,  "m2": 20, "durationMs": 400 },

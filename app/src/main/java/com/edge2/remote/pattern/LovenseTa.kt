@@ -1,20 +1,20 @@
 package com.edge2.remote.pattern
 
 /**
- * Décodeur du format de pattern Lovense `.ta` (reverse-engineered, cf.
- * PATTERNS_API.md). Les fichiers `.ta` sont publics sur le CDN Lovense.
+ * Decoder for the Lovense `.ta` pattern format (reverse-engineered, see
+ * PATTERNS_API.md). `.ta` files are public on the Lovense CDN.
  *
- * Format :
+ * Format:
  * ```
  * V:1;T:Ambi;F:v;S:100;M:<md5>;#
- * 0;3;8;9;9;7;11;13;...        ← intensités séparées par ';' (0..20)
+ * 0;3;8;9;9;7;11;13;...        ← intensities separated by ';' (0..20)
  * ```
- * Header (avant `#`) : V=version, T=type de toy, F=feature, S=scale, M=md5.
- * Corps (après `#`) : une intensité par tick. Lovense joue **1 point / 100 ms**.
+ * Header (before `#`): V=version, T=toy type, F=feature, S=scale, M=md5.
+ * Body (after `#`): one intensity per tick. Lovense plays **1 point / 100 ms**.
  */
 object LovenseTa {
 
-    /** Intervalle de lecture Lovense confirmé (PatternPlayManagerImpl). */
+    /** Lovense playback interval, confirmed (PatternPlayManagerImpl). */
     const val INTERVAL_MS = 100L
 
     fun parse(content: String, fallbackName: String = "Lovense"): Pattern? {
@@ -26,12 +26,17 @@ object LovenseTa {
             val kv = it.split(':', limit = 2)
             if (kv.size == 2) kv[0].trim() to kv[1].trim() else null
         }.toMap()
-        val name = fields["T"]?.takeIf { it.isNotBlank() } ?: fallbackName
+        // Name bounded and sanitized (shown in the UI).
+        val name = (fields["T"]?.takeIf { it.isNotBlank() } ?: fallbackName)
+            .filter { !it.isISOControl() }.take(MAX_NAME).ifBlank { "Lovense" }
 
-        // Les valeurs peuvent être séparées par ';' ou ',' selon la version.
+        // Values may be separated by ';' or ',' depending on the version.
         val strengths = body.trim()
             .split(Regex("[;,\\s]+"))
+            .asSequence()
             .mapNotNull { it.toIntOrNull() }
+            .take(MAX_STEPS)
+            .toList()
         if (strengths.isEmpty()) return null
 
         val steps = strengths.map {
@@ -41,6 +46,10 @@ object LovenseTa {
         return Pattern(name = name, steps = steps, loop = true)
     }
 
-    // Intensité max Lovense (0..20). Dupliqué ici pour éviter une dépendance ble→pattern.
+    // Lovense max intensity (0..20). Duplicated here to avoid a ble→pattern dependency.
     private const val LovenseProtocol_MAX = 20
+
+    /** Anti-abuse bounds (hostile file): ~2 h of pattern at 100 ms/step. */
+    private const val MAX_STEPS = 72_000
+    private const val MAX_NAME = 40
 }

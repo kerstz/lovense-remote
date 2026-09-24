@@ -16,7 +16,7 @@ import androidx.core.view.WindowCompat
 private val DarkScheme = darkColorScheme(
     primary = Edge2Dark.gradStart,
     onPrimary = Color.White,
-    secondary = Edge2Dark.tige,
+    secondary = Edge2Dark.shaft,
     background = Edge2Dark.bg,
     onBackground = Edge2Dark.ink,
     surface = Edge2Dark.surface,
@@ -31,7 +31,7 @@ private val DarkScheme = darkColorScheme(
 private val LightScheme = lightColorScheme(
     primary = Edge2Light.gradStart,
     onPrimary = Color.White,
-    secondary = Edge2Light.tige,
+    secondary = Edge2Light.shaft,
     background = Edge2Light.bg,
     onBackground = Edge2Light.ink,
     surface = Edge2Light.surface,
@@ -43,7 +43,7 @@ private val LightScheme = lightColorScheme(
     onError = Color.White,
 )
 
-/** Thème identité Edge2 : sombre par défaut, clair en variante. Pas de dynamic color. */
+/** Edge2 brand theme: dark by default, light as a variant. No dynamic colour. */
 @Composable
 fun Edge2Theme(
     darkTheme: Boolean = isSystemInDarkTheme(),
@@ -67,7 +67,7 @@ fun Edge2Theme(
     }
 }
 
-/** Accès aux couleurs identité : `Edge2.colors.base`, etc. */
+/** Access to brand colours: `Edge2.colors.base`, etc. */
 object Edge2 {
     val colors: Edge2Colors
         @Composable @ReadOnlyComposable get() = LocalEdge2Colors.current

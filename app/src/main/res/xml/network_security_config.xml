@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Cleartext (ws://) is still needed for same-Wi-Fi control (arbitrary local
+     IP, which can't be expressed here). Only system CAs are trusted (never
+     user-added CAs). -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>
