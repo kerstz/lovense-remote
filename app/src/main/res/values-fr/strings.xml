@@ -14,7 +14,7 @@
     <string name="conn_connecting">Connexion…</string>
     <string name="conn_searching">Recherche de jouets à proximité…</string>
     <string name="conn_count">%1$d jouet(s) visible(s)</string>
-    <string name="conn_empty">Aucun jouet pour l\'instant. Allume-le et rapproche-le. Marques : Lovense, We-Vibe, Vorze, Magic Motion (hors Lovense : expérimental).</string>
+    <string name="conn_empty">Aucun jouet pour l\'instant. Allume-le et rapproche-le. Plus de 125 protocoles et 900 modèles pris en charge (Lovense testé, les autres en expérimental).</string>
     <string name="conn_retry">Réessayer</string>
     <string name="conn_footer">Active le Bluetooth et la localisation si demandé.\nSeuls les jouets allumés et proches apparaissent.</string>
     <string name="device_signal">%1$d dBm · BLE direct</string>
@@ -120,4 +120,19 @@
 N\'accepte que si tu as reçu ce lien de quelqu\'un de confiance.</string>
     <string name="ctrl_waiting">En attente de l\'accord de l\'hôte…</string>
     <string name="ctrl_denied">Accès refusé ou session terminée</string>
+
+    <!-- Toy features -->
+    <string name="kind_thrust">Va-et-vient</string>
+    <string name="kind_heat">Chauffage</string>
+    <string name="kind_light">Lumière</string>
+    <string name="kind_spray">Lubrifiant</string>
+    <string name="action_spray">Pulvériser</string>
+    <string name="kind_position">Position</string>
+    <string name="kind_stroke">Vitesse de course</string>
+    <string name="state_on">Allumé</string>
+    <string name="state_off">Éteint</string>
+    <string name="temp_fmt">%1$d °C</string>
+    <string name="hint_press_power">Appuie sur le bouton du jouet pour autoriser la connexion</string>
+    <string name="hint_pair_pin">Appaire le jouet dans les réglages Bluetooth d\'Android (PIN 6496)</string>
+    <string name="conn_unsupported">pas encore pris en charge</string>
 </resources>
