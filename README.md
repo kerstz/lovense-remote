@@ -37,10 +37,15 @@ Open-source Android remote. Several toys at once, several brands, the UI adapts 
 - **🔵 Direct BLE** — scan, connect and drive toys straight from your phone.
 - **🧸 Several toys at once** — connect up to 5 toys, drive each one or **all**
   together; patterns, presets and remote control follow the selected target.
-- **🏷 Multi-brand** — Lovense (Lush, Hush, Edge, Nora, Max, Domi, Ferri,
-  Gemini…) plus **experimental** We-Vibe, Vorze and Magic Motion support (see
-  [`docs/research/other-brands.md`](docs/research/other-brands.md)). The UI
-  adapts to each toy's actuators (vibration, dual motor, rotation, suction).
+- **🏷 800+ models, 120+ brands** — Lovense (tested) plus **experimental**
+  Satisfyer, We-Vibe, Svakom, Lelo, Kiiroo, Magic Motion, JoyHub, Galaku, Hismith,
+  Vorze, Foreo, Sistalk and many more — see the
+  [**full list of supported toys**](docs/SUPPORTED_TOYS.md).
+- **🎚 UI that adapts to each toy** — one control per actuator, built from the
+  device database: vibration (one or several motors), rotation with direction
+  flip, thrusting, suction / pump, **heating** (on/off or °C), **lights**,
+  **lube pump** (momentary *Spray* button) and **strokers** (the app generates
+  the strokes). Battery level when the toy reports it.
 - **👍 One-hand XY pad** — one thumb drives both motors of two-motor toys.
 - **🎛 Patterns** — built-ins, Lovense `.ta` import, a random **Tease** mode, and
   a **record** mode (perform → saved pattern).
@@ -51,6 +56,21 @@ Open-source Android remote. Several toys at once, several brands, the UI adapts 
   quick-settings **STOP** tile.
 - **🌍 i18n & themes** — English (default) / French / Spanish, dark & light.
 - **🟢 100 % AOSP** — no Google Play Services (GrapheneOS-friendly).
+
+## 🧸 Supported toys
+
+**803 models** across **127 brand families** — the complete, generated list is in
+[`docs/SUPPORTED_TOYS.md`](docs/SUPPORTED_TOYS.md) (regenerate it with
+`python3 tools/gen_supported.py`).
+
+| | Brands (models) |
+|---|---|
+| ✅ Tested | **Lovense** (36): Lush, Hush, Edge, Nora, Max, Domi, Ferri, Gemini, Gravity, Solace, Flexer, Tenera, Calor… |
+| 🧪 Experimental | JoyHub (159), Galaku (97), Satisfyer (84), Foreo (26), WeVibe (23), Honey Play Box (21), Hismith (20), Svakom (51), Kiiroo (30+), Sexverse (22), Magic Motion (29), Lelo (15), Sistalk MonsterPub (13), Libo (14), Sensee (12), Love Distance (9), Vorze (7), MysteryVibe (8), Vibio, VibCrafter, Fluffer, Motorbunny, OSSM, Lioness, Aneros, Je Joue, Lovehoney, Picobong, Pink Punch… |
+| 🚫 Not yet | The Handy, KGoal Boost, Muse, Cueme, SayberX, Kiiroo V1, Libo Karen, Twerking Butt |
+
+Toys with extra functions: 🔥 **22** heating · 💨 **52** suction / pump ·
+🎚️ **20** strokers · 💡 **3** lights · 💧 **3** lube pumps.
 
 ## 📲 Install
 
@@ -71,9 +91,15 @@ Kotlin + Jetpack Compose · minSdk 26 · target/compile SDK 35.
 <details>
 <summary>🧩 Architecture</summary>
 
-- `ble/` — multi-toy BLE layer: scan (`ToyManager`), one `ToyConnection` per
-  toy (GATT, coalesced writes, reconnection), and one `ToyDriver` per brand
-  (see [`docs/research/lovense-ble-protocol.md`](docs/research/lovense-ble-protocol.md)
+- `ble/` — multi-toy BLE layer: scan and identification (`ToyManager`), one
+  `ToyConnection` per toy (GATT with named endpoints, serialized operations,
+  coalesced writes, keepalive, stroke generator, battery, reconnection).
+- `ble/db/` — the device database (`assets/devices.json`, generated from the
+  Buttplug device config by `tools/gen_devices.py`): BLE names, manufacturer
+  data, services and each model's features.
+- `ble/proto/` — one `ProtocolHandler` per protocol (~128), ported from
+  Buttplug: handshakes, encryption, checksums and per-feature commands (see
+  [`docs/research/lovense-ble-protocol.md`](docs/research/lovense-ble-protocol.md)
   and [`docs/research/other-brands.md`](docs/research/other-brands.md)).
 - `RemoteEngine` — process-scoped core (BLE + server + tunnel + state) so control
   survives the Activity / the app being closed.
@@ -107,8 +133,16 @@ Remote control is layered so that knowing the link is never enough:
 Limits you should know: LAN sharing is plain HTTP (use a trusted Wi-Fi only).
 Internet sharing goes through **localhost.run** (a third party) which terminates
 TLS and can see the control traffic — the PIN + your approval remain the gate.
-Non-Lovense brands are experimental (community protocol data, untested here).
+Non-Lovense brands are experimental (community protocol data, untested here);
+a few need a pairing step (e.g. press the power button on Lelo, PIN 6496 on
+Lioness) — the app tells you when.
 
 ## ⚖️ License
 
-[GPLv3](LICENSE). Not affiliated with, or endorsed by, Lovense.
+[GPLv3](LICENSE). Not affiliated with, or endorsed by, Lovense or any other
+brand listed here.
+
+The device database and the protocol ports come from
+[Buttplug](https://github.com/buttplugio/buttplug) (BSD-3-Clause, © Nonpolynomial
+Labs) — see [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md). Thanks to the
+Buttplug / Intiface community for years of reverse engineering.

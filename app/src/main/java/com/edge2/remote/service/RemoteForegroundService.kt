@@ -68,7 +68,7 @@ class RemoteForegroundService : Service() {
     }
 
     private fun createChannel() {
-        val mgr = getSystemService(NotificationManager::class.java)
+        val mgr = getSystemService(NotificationManager::class.java) ?: return
         if (mgr.getNotificationChannel(CHANNEL) == null) {
             mgr.createNotificationChannel(
                 NotificationChannel(CHANNEL, getString(R.string.notif_channel), NotificationManager.IMPORTANCE_LOW),

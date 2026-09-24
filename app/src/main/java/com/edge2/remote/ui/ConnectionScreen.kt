@@ -28,6 +28,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -197,10 +198,11 @@ private fun DeviceCard(toy: DiscoveredToy, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .alpha(if (toy.supported) 1f else .5f)
             .clip(RoundedCornerShape(18.dp))
             .background(c.gradStart.copy(alpha = .12f))
             .border(1.dp, c.gradStart.copy(alpha = .42f), RoundedCornerShape(18.dp))
-            .clickable { onClick() }
+            .clickable(enabled = toy.supported) { onClick() }
             .padding(15.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(13.dp),
@@ -217,14 +219,18 @@ private fun DeviceCard(toy: DiscoveredToy, onClick: () -> Unit) {
         Column(Modifier.weight(1f)) {
             Text(toy.displayName, color = c.ink, fontWeight = FontWeight.Bold, fontSize = 15.sp, maxLines = 1)
             Text(
-                toy.brand.displayName + (if (toy.brand.experimental) " · " + stringResource(R.string.brand_experimental) else "") +
+                toy.brand +
+                    (if (!toy.supported) " · " + stringResource(R.string.conn_unsupported)
+                    else if (toy.experimental) " · " + stringResource(R.string.brand_experimental) else "") +
                     " · " + stringResource(R.string.device_signal, toy.rssi),
                 color = c.muted, fontFamily = JetBrainsMono, fontSize = 11.sp,
             )
         }
-        Text(
-            stringResource(R.string.action_connect), color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 12.sp,
-            modifier = Modifier.clip(RoundedCornerShape(11.dp)).background(c.gradStart).padding(horizontal = 15.dp, vertical = 9.dp),
-        )
+        if (toy.supported) {
+            Text(
+                stringResource(R.string.action_connect), color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 12.sp,
+                modifier = Modifier.clip(RoundedCornerShape(11.dp)).background(c.gradStart).padding(horizontal = 15.dp, vertical = 9.dp),
+            )
+        }
     }
 }

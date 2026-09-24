@@ -14,7 +14,7 @@
     <string name="conn_connecting">Connecting…</string>
     <string name="conn_searching">Searching for nearby toys…</string>
     <string name="conn_count">%1$d toy(s) found</string>
-    <string name="conn_empty">No toy yet. Turn it on and bring it closer. Brands: Lovense, We-Vibe, Vorze, Magic Motion (non-Lovense: experimental).</string>
+    <string name="conn_empty">No toy yet. Turn it on and bring it closer. 125+ protocols and 900+ models supported (Lovense tested, others experimental).</string>
     <string name="conn_retry">Retry</string>
     <string name="conn_footer">Turn on Bluetooth, and location if prompted.\nOnly toys that are on and nearby appear here.</string>
     <string name="device_signal">%1$d dBm · direct BLE</string>
@@ -120,4 +120,19 @@
 Only accept if you got this link from someone you trust.</string>
     <string name="ctrl_waiting">Waiting for the host\'s approval…</string>
     <string name="ctrl_denied">Access denied or session ended</string>
+
+    <!-- Toy features -->
+    <string name="kind_thrust">Thrust</string>
+    <string name="kind_heat">Heating</string>
+    <string name="kind_light">Light</string>
+    <string name="kind_spray">Lube</string>
+    <string name="action_spray">Spray</string>
+    <string name="kind_position">Position</string>
+    <string name="kind_stroke">Stroke speed</string>
+    <string name="state_on">On</string>
+    <string name="state_off">Off</string>
+    <string name="temp_fmt">%1$d °C</string>
+    <string name="hint_press_power">Press the toy\'s power button to authorise the connection</string>
+    <string name="hint_pair_pin">Pair the toy in Android Bluetooth settings (PIN 6496)</string>
+    <string name="conn_unsupported">not supported yet</string>
 </resources>

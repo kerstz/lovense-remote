@@ -58,8 +58,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.edge2.remote.R
 import com.edge2.remote.RemoteViewModel
 import com.edge2.remote.ShareError
+import com.edge2.remote.ble.Actuator
 import com.edge2.remote.ble.ActuatorKind
-import com.edge2.remote.ble.Brand
+import com.edge2.remote.ble.proto.Hint
 import com.edge2.remote.ble.LinkState
 import com.edge2.remote.ble.ToyStatus
 import com.edge2.remote.pattern.BuiltinPatterns
@@ -257,12 +258,20 @@ fun RemoteScreen(vm: RemoteViewModel, onAddToy: () -> Unit, onSettings: () -> Un
 }
 
 @Composable
-private fun linkLabel(t: ToyStatus): String = when (val l = t.link) {
+private fun linkLabel(t: ToyStatus): String = t.hint?.let { hintLabel(it) } ?: when (val l = t.link) {
     LinkState.Connected -> stringResource(R.string.status_connected)
     LinkState.Connecting -> stringResource(R.string.toy_connecting)
     LinkState.Reconnecting -> stringResource(R.string.toy_reconnecting)
     is LinkState.Error -> stringResource(R.string.toy_error, l.reason)
 }
+
+@Composable
+private fun hintLabel(h: Hint): String = stringResource(
+    when (h) {
+        Hint.PRESS_POWER_BUTTON -> R.string.hint_press_power
+        Hint.PAIR_WITH_PIN_6496 -> R.string.hint_pair_pin
+    },
+)
 
 /** Selection chips: "All" (if ≥ 2 toys), one per toy, and "+ Toy". */
 @Composable
@@ -315,7 +324,7 @@ private fun ToyNotReady(t: ToyStatus, onRemove: () -> Unit) {
     }
 }
 
-/** "All" target: master slider applied to every actuator of every toy. */
+/** "All" target: master slider applied to every motion actuator of every toy. */
 @Composable
 private fun AllToysControls(vm: RemoteViewModel, toys: List<ToyStatus>) {
     val c = Edge2.colors
@@ -323,7 +332,7 @@ private fun AllToysControls(vm: RemoteViewModel, toys: List<ToyStatus>) {
     Text(stringResource(R.string.hint_all), color = c.muted, fontSize = 11.sp, modifier = Modifier.fillMaxWidth())
     ActuatorSlider(
         label = stringResource(R.string.label_all), accent = c.base, fraction = master,
-        percent = (master * 100).roundToInt(), reversible = false, onReverse = {},
+        valueText = "${(master * 100).roundToInt()}%", reversible = false, onReverse = {},
         onChange = { f -> master = f; vm.setAll(null, f) },
     )
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(9.dp)) {
@@ -332,28 +341,29 @@ private fun AllToysControls(vm: RemoteViewModel, toys: List<ToyStatus>) {
         PresetButton(stringResource(R.string.preset_medium), Modifier.weight(1f)) { all(0.60f) }
         PresetButton(stringResource(R.string.preset_strong), Modifier.weight(1f)) { all(0.90f) }
     }
-    // Reminder of each toy's state (level of its first actuator).
+    // Reminder of each toy's state (level of its first motion actuator).
     toys.forEach { t ->
-        val max = t.toy.actuators.firstOrNull()?.max ?: 1
-        val pct = ((t.levels.firstOrNull() ?: 0) * 100f / max).roundToInt()
+        val i = t.toy.motion.firstOrNull()
+        val pct = i?.let { (t.toy.actuators[it].fractionOf(t.levels.getOrElse(it) { 0 }) * 100).roundToInt() } ?: 0
         Text("${t.displayName} · ${linkLabel(t)} · $pct%", color = c.faint, fontSize = 11.sp, fontFamily = JetBrainsMono)
     }
 }
 
-/** Two-vibrator toys (Edge, Gemini, We-Vibe Sync…): XY pad + readouts + Link + presets. */
+/** Two-vibrator toys (Edge, Gemini, We-Vibe Sync…): XY pad + readouts + Link + presets, then extras. */
 @Composable
 private fun DualVibrateControls(vm: RemoteViewModel, t: ToyStatus, playing: Boolean) {
     val c = Edge2.colors
     val link by vm.linkMode.collectAsStateWithLifecycle()
+    val (i0, i1) = t.toy.motion[0] to t.toy.motion[1]
+    val a0 = t.toy.actuators[i0]
+    val a1 = t.toy.actuators[i1]
     // Manual drag = source of truth; during a pattern, follow the real motors.
     var localBase by remember(t.address) { mutableFloatStateOf(0f) }
     var localShaft by remember(t.address) { mutableFloatStateOf(0f) }
-    val m1 = t.toy.actuators[0].max.toFloat()
-    val m2 = t.toy.actuators[1].max.toFloat()
-    val baseF = if (playing) t.levels.getOrElse(0) { 0 } / m1 else localBase
-    val shaftF = if (playing) t.levels.getOrElse(1) { 0 } / m2 else localShaft
+    val baseF = if (playing) a0.fractionOf(t.levels.getOrElse(i0) { 0 }) else localBase
+    val shaftF = if (playing) a1.fractionOf(t.levels.getOrElse(i1) { 0 }) else localShaft
     // BASE/SHAFT labels are Edge-specific; generic otherwise.
-    val edge = t.toy.brand == Brand.LOVENSE && t.toy.code == "P"
+    val edge = t.toy.protocolId == "lovense" && t.toy.displayName.contains("Edge")
     val xLabel = stringResource(if (edge) R.string.label_base else R.string.label_m1)
     val yLabel = stringResource(if (edge) R.string.label_shaft else R.string.label_m2)
 
@@ -382,9 +392,14 @@ private fun DualVibrateControls(vm: RemoteViewModel, t: ToyStatus, playing: Bool
         PresetButton(stringResource(R.string.preset_medium), Modifier.weight(1f)) { preset(0.60f) }
         PresetButton(stringResource(R.string.preset_strong), Modifier.weight(1f)) { preset(0.90f) }
     }
+    // Heating, light, lube pump… of the same toy.
+    val local = remember(t.address, t.toy) { mutableStateListOf<Float>().apply { repeat(t.toy.actuators.size) { add(0f) } } }
+    t.toy.actuators.forEachIndexed { i, act ->
+        if (!act.kind.isMotion) ActuatorControl(vm, t, i, act, playing, local)
+    }
 }
 
-/** Other toys: one labelled slider per actuator (+ direction button for rotation). */
+/** Any toy: one control per actuator, shaped by its kind (slider, toggle, button…). */
 @Composable
 private fun ActuatorControls(vm: RemoteViewModel, t: ToyStatus, playing: Boolean) {
     val c = Edge2.colors
@@ -392,24 +407,82 @@ private fun ActuatorControls(vm: RemoteViewModel, t: ToyStatus, playing: Boolean
     val local = remember(t.address, toy) { mutableStateListOf<Float>().apply { repeat(toy.actuators.size) { add(0f) } } }
 
     Text(stringResource(R.string.hint_actuators, toy.displayName), color = c.muted, fontSize = 11.sp, modifier = Modifier.fillMaxWidth())
-    toy.actuators.forEachIndexed { i, act ->
-        val accent = when (act.kind) {
-            ActuatorKind.VIBRATE -> if (i == 0) c.base else c.shaft
-            ActuatorKind.ROTATE -> c.shaft
-            ActuatorKind.SUCTION -> c.live
+    toy.actuators.forEachIndexed { i, act -> ActuatorControl(vm, t, i, act, playing, local) }
+    if (toy.motion.isNotEmpty()) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+            fun all(f: Float) { toy.motion.forEach { if (it < local.size) local[it] = f }; vm.setAll(t.address, f) }
+            PresetButton(stringResource(R.string.preset_soft), Modifier.weight(1f)) { all(0.30f) }
+            PresetButton(stringResource(R.string.preset_medium), Modifier.weight(1f)) { all(0.60f) }
+            PresetButton(stringResource(R.string.preset_strong), Modifier.weight(1f)) { all(0.90f) }
         }
-        val value = if (playing && i < t.levels.size) t.levels[i] / act.max.toFloat() else local.getOrElse(i) { 0f }
-        ActuatorSlider(
-            label = kindLabel(act.kind), accent = accent, fraction = value, percent = (value * 100).roundToInt(),
-            reversible = act.reversible, onReverse = { vm.reverse(t.address, i) },
-            onChange = { f -> if (i < local.size) local[i] = f; vm.setActuator(t.address, i, f) },
+    }
+}
+
+/** One actuator's control: slider, on/off toggle, momentary button or temperature. */
+@Composable
+private fun ActuatorControl(vm: RemoteViewModel, t: ToyStatus, i: Int, act: Actuator, playing: Boolean, local: MutableList<Float>) {
+    val c = Edge2.colors
+    val accent = when (act.kind) {
+        ActuatorKind.VIBRATE -> if (i % 2 == 0) c.base else c.shaft
+        ActuatorKind.ROTATE, ActuatorKind.OSCILLATE, ActuatorKind.STROKE, ActuatorKind.POSITION -> c.shaft
+        ActuatorKind.CONSTRICT -> c.live
+        ActuatorKind.TEMPERATURE -> c.danger
+        ActuatorKind.LED, ActuatorKind.SPRAY -> c.base
+    }
+    // "Vibration 2" when a toy has several actuators of the same kind.
+    val sameKind = t.toy.actuators.filter { it.kind == act.kind }
+    val label = kindLabel(act.kind) + if (sameKind.size > 1) " ${sameKind.indexOf(act) + 1}" else ""
+    val value = if (playing && act.kind.isMotion && i < t.levels.size) act.fractionOf(t.levels[i]) else local.getOrElse(i) { 0f }
+    fun set(f: Float) { if (i < local.size) local[i] = f; vm.setActuator(t.address, i, f) }
+
+    when {
+        act.kind == ActuatorKind.SPRAY -> ActionRow(label, accent, stringResource(R.string.action_spray)) { vm.setActuator(t.address, i, 1f) }
+        act.isToggle && !act.kind.isMotion -> ToggleRow(label, accent, value > 0f) { on -> set(if (on) 1f else 0f) }
+        act.kind == ActuatorKind.TEMPERATURE && act.min > 0 -> {
+            val deg = if (value <= 0f) null else act.levelFor(value)
+            ActuatorSlider(
+                label = label, accent = accent, fraction = value,
+                valueText = deg?.let { stringResource(R.string.temp_fmt, it) } ?: stringResource(R.string.state_off),
+                reversible = false, onReverse = {}, onChange = ::set,
+            )
+        }
+        else -> ActuatorSlider(
+            label = label, accent = accent, fraction = value, valueText = "${(value * 100).roundToInt()}%",
+            reversible = act.reversible, onReverse = { vm.reverse(t.address, i) }, onChange = ::set,
         )
     }
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-        fun all(f: Float) { for (i in local.indices) local[i] = f; vm.setAll(t.address, f) }
-        PresetButton(stringResource(R.string.preset_soft), Modifier.weight(1f)) { all(0.30f) }
-        PresetButton(stringResource(R.string.preset_medium), Modifier.weight(1f)) { all(0.60f) }
-        PresetButton(stringResource(R.string.preset_strong), Modifier.weight(1f)) { all(0.90f) }
+}
+
+@Composable
+private fun ToggleRow(label: String, accent: Color, on: Boolean, onToggle: (Boolean) -> Unit) {
+    val c = Edge2.colors
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(15.dp))
+            .background(accent.copy(alpha = if (on) .16f else .06f))
+            .border(1.dp, accent.copy(alpha = if (on) .5f else .25f), RoundedCornerShape(15.dp))
+            .clickable { onToggle(!on) }
+            .padding(horizontal = 15.dp, vertical = 14.dp),
+        horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(label.uppercase(), color = accent, fontWeight = FontWeight.SemiBold, fontSize = 10.sp, letterSpacing = 2.sp)
+        Text(
+            stringResource(if (on) R.string.state_on else R.string.state_off),
+            color = if (on) c.ink else c.muted, fontWeight = FontWeight.Bold, fontSize = 14.sp,
+        )
+    }
+}
+
+@Composable
+private fun ActionRow(label: String, accent: Color, action: String, onClick: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(15.dp))
+            .background(accent.copy(alpha = .06f))
+            .border(1.dp, accent.copy(alpha = .25f), RoundedCornerShape(15.dp))
+            .padding(horizontal = 15.dp, vertical = 10.dp),
+        horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(label.uppercase(), color = accent, fontWeight = FontWeight.SemiBold, fontSize = 10.sp, letterSpacing = 2.sp)
+        GhostChip(action) { onClick() }
     }
 }
 
@@ -419,7 +492,13 @@ private fun kindLabel(kind: ActuatorKind): String = stringResource(
     when (kind) {
         ActuatorKind.VIBRATE -> R.string.kind_vibrate
         ActuatorKind.ROTATE -> R.string.kind_rotate
-        ActuatorKind.SUCTION -> R.string.kind_air
+        ActuatorKind.OSCILLATE -> R.string.kind_thrust
+        ActuatorKind.CONSTRICT -> R.string.kind_air
+        ActuatorKind.TEMPERATURE -> R.string.kind_heat
+        ActuatorKind.LED -> R.string.kind_light
+        ActuatorKind.SPRAY -> R.string.kind_spray
+        ActuatorKind.POSITION -> R.string.kind_position
+        ActuatorKind.STROKE -> R.string.kind_stroke
     },
 )
 
@@ -428,7 +507,7 @@ private fun ActuatorSlider(
     label: String,
     accent: Color,
     fraction: Float,
-    percent: Int,
+    valueText: String,
     reversible: Boolean,
     onReverse: () -> Unit,
     onChange: (Float) -> Unit,
@@ -451,10 +530,7 @@ private fun ActuatorSlider(
                             .clickable { onReverse() }.padding(horizontal = 9.dp, vertical = 4.dp),
                     )
                 }
-                Row(verticalAlignment = Alignment.Bottom) {
-                    Text("$percent", color = c.ink, fontFamily = JetBrainsMono, fontWeight = FontWeight.Bold, fontSize = 20.sp)
-                    Text("%", color = c.muted, fontFamily = JetBrainsMono, fontSize = 12.sp, modifier = Modifier.padding(bottom = 2.dp))
-                }
+                Text(valueText, color = c.ink, fontFamily = JetBrainsMono, fontWeight = FontWeight.Bold, fontSize = 20.sp)
             }
         }
         Slider(
