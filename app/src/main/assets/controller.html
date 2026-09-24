@@ -3,7 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>Edge2 Remote — Contrôle</title>
+<meta name="referrer" content="no-referrer">
+<title>Remote — Contrôle</title>
 <style>
   /* Fonts self-hébergées (servies par l'app via /font/, aucun appel CDN externe). */
   @font-face { font-family: 'Space Grotesk'; font-style: normal; font-weight: 400 700; font-display: swap; src: url('/font/space_grotesk.ttf') format('truetype'); }
@@ -88,6 +89,11 @@
   .btn-ghost { width: 100%; max-width: 320px; padding: 15px; border-radius: 17px; cursor: pointer;
     background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.12); color: #C9C9D2; font-family: 'Space Grotesk'; font-weight: 600; font-size: 14px; }
   .lock { font-size: 10.5px; color: #5E5E6A; }
+  .toys { display: flex; gap: 8px; flex-wrap: wrap; }
+  .toys:empty { display: none; }
+  .toys .chip { flex: none; padding: 9px 13px; font-size: 12px; }
+  .live.wait { background: rgba(255,200,90,.10); border-color: rgba(255,200,90,.35); }
+  .live.wait .ping span { background: #FFC85A; }
 </style>
 </head>
 <body>
@@ -104,14 +110,15 @@
   <div class="spacer" style="max-height:24px;"></div>
   <button class="btn-primary" id="openApp" data-i18n="openApp">Ouvrir dans l'app</button>
   <button class="btn-ghost" id="goWeb" data-i18n="goWeb">Continuer sur le web</button>
-  <div class="lock" data-i18n="lock">🔒 Connexion chiffrée · aucune donnée stockée</div>
+  <div class="lock" id="lock"></div>
 </div>
 
 <!-- Porte PIN (si l'hôte a mis un code) -->
 <div id="pinGate" style="display:none;position:fixed;inset:0;z-index:11;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:32px;text-align:center;background:radial-gradient(120% 70% at 50% 0%,#1A1622,#0C0C12);">
   <div class="eyebrow" data-i18n="pinTitle">CODE</div>
-  <div style="font-size:20px;font-weight:700;" data-i18n="pinAsk">Entre le code à 4 chiffres</div>
-  <input id="pinInput" inputmode="numeric" maxlength="6" style="width:170px;text-align:center;font-size:30px;letter-spacing:10px;padding:12px;border-radius:14px;background:#15151c;border:1px solid #333;color:#fff;font-family:'JetBrains Mono';">
+  <div style="font-size:20px;font-weight:700;" data-i18n="pinAsk">Entre le code à 6 chiffres</div>
+  <div id="pinErr" style="display:none;color:#FF8BA1;font-size:13px;" data-i18n="pinBad">Code refusé</div>
+  <input id="pinInput" inputmode="numeric" autocomplete="off" maxlength="6" style="width:170px;text-align:center;font-size:30px;letter-spacing:10px;padding:12px;border-radius:14px;background:#15151c;border:1px solid #333;color:#fff;font-family:'JetBrains Mono';">
   <button class="btn-primary" id="pinOk" data-i18n="pinOk">Valider</button>
 </div>
 
@@ -124,6 +131,8 @@
   </div>
   <button class="appbtn" id="openApp2" data-i18n="openApp2">Ouvrir l'app</button>
 </div>
+
+<div class="toys" id="toys"></div>
 
 <div class="hint" data-i18n="hint">Glisse le point — horizontal = base · vertical = tige</div>
 
@@ -154,23 +163,26 @@
   // --- i18n : suit la langue du navigateur (fr par défaut) ---
   var I18N = {
     fr: { invitation:'INVITATION', inviteTitle:'Tu es invité·e à<br>prendre les commandes', inviteSub:'Contrôle en direct · session temporaire',
-      openApp:'Ouvrir dans l\'app', goWeb:'Continuer sur le web', lock:'🔒 Connexion chiffrée · aucune donnée stockée', openApp2:'Ouvrir l\'app',
-      hint:'Glisse le point — horizontal = base · vertical = tige', base:'BASE', tige:'TIGE', soft:'Doux', medium:'Moyen', strong:'Fort', stopAll:'TOUT ARRÊTER',
+      openApp:'Ouvrir dans l\'app', goWeb:'Continuer sur le web', lockTls:'🔒 Chiffré jusqu\'au relais · aucune donnée stockée', lockLan:'Réseau local (Wi-Fi) · non chiffré · aucune donnée stockée', openApp2:'Ouvrir l\'app',
+      hint:'Glisse le point — horizontal = moteur 1 · vertical = moteur 2', base:'MOTEUR 1', tige:'MOTEUR 2', soft:'Doux', medium:'Moyen', strong:'Fort', stopAll:'TOUT ARRÊTER',
       connecting:'Connexion…', linking:'Établissement du lien', liveOn:'En direct · tu as le contrôle', liveSub2:'Contrôle à distance',
       disconnected:'Déconnecté', reconnecting:'Reconnexion…',
-      pinTitle:'CODE', pinAsk:'Entre le code à 4 chiffres', pinOk:'Valider' },
+      pinTitle:'CODE', pinAsk:'Entre le code à 6 chiffres', pinOk:'Valider', pinBad:'Code refusé — vérifie-le',
+      waiting:'En attente de l\'accord…', waitingSub:'L\'hôte doit accepter ta demande', allToys:'Tous', ended:'Session terminée' },
     en: { invitation:'INVITATION', inviteTitle:'You are invited to<br>take control', inviteSub:'Live control · temporary session',
-      openApp:'Open in the app', goWeb:'Continue on the web', lock:'🔒 Encrypted connection · no data stored', openApp2:'Open app',
-      hint:'Drag the dot — horizontal = base · vertical = shaft', base:'BASE', tige:'SHAFT', soft:'Soft', medium:'Medium', strong:'Strong', stopAll:'STOP ALL',
+      openApp:'Open in the app', goWeb:'Continue on the web', lockTls:'🔒 Encrypted up to the relay · no data stored', lockLan:'Local network (Wi-Fi) · not encrypted · no data stored', openApp2:'Open app',
+      hint:'Drag the dot — horizontal = motor 1 · vertical = motor 2', base:'MOTOR 1', tige:'MOTOR 2', soft:'Soft', medium:'Medium', strong:'Strong', stopAll:'STOP ALL',
       connecting:'Connecting…', linking:'Establishing link', liveOn:'Live · you have control', liveSub2:'Remote control',
       disconnected:'Disconnected', reconnecting:'Reconnecting…',
-      pinTitle:'CODE', pinAsk:'Enter the 4-digit code', pinOk:'Confirm' },
+      pinTitle:'CODE', pinAsk:'Enter the 6-digit code', pinOk:'Confirm', pinBad:'Code rejected — check it',
+      waiting:'Waiting for approval…', waitingSub:'The host must accept your request', allToys:'All', ended:'Session ended' },
     es: { invitation:'INVITACIÓN', inviteTitle:'Estás invitado/a a<br>tomar el control', inviteSub:'Control en vivo · sesión temporal',
-      openApp:'Abrir en la app', goWeb:'Continuar en la web', lock:'🔒 Conexión cifrada · sin datos almacenados', openApp2:'Abrir app',
-      hint:'Arrastra el punto — horizontal = base · vertical = eje', base:'BASE', tige:'EJE', soft:'Suave', medium:'Medio', strong:'Fuerte', stopAll:'PARAR TODO',
+      openApp:'Abrir en la app', goWeb:'Continuar en la web', lockTls:'🔒 Cifrado hasta el relé · sin datos almacenados', lockLan:'Red local (Wi-Fi) · sin cifrar · sin datos almacenados', openApp2:'Abrir app',
+      hint:'Arrastra el punto — horizontal = motor 1 · vertical = motor 2', base:'MOTOR 1', tige:'MOTOR 2', soft:'Suave', medium:'Medio', strong:'Fuerte', stopAll:'PARAR TODO',
       connecting:'Conectando…', linking:'Estableciendo enlace', liveOn:'En vivo · tienes el control', liveSub2:'Control remoto',
       disconnected:'Desconectado', reconnecting:'Reconectando…',
-      pinTitle:'CÓDIGO', pinAsk:'Introduce el código de 4 dígitos', pinOk:'Confirmar' },
+      pinTitle:'CÓDIGO', pinAsk:'Introduce el código de 6 dígitos', pinOk:'Confirmar', pinBad:'Código rechazado — revísalo',
+      waiting:'Esperando aprobación…', waitingSub:'El anfitrión debe aceptar tu solicitud', allToys:'Todos', ended:'Sesión terminada' },
   };
   var lang = (navigator.language || 'fr').slice(0, 2);
   var T = I18N[lang] || I18N.fr;
@@ -188,28 +200,27 @@
   }
   applyI18n();
 
+  document.getElementById('lock').textContent = location.protocol === 'https:' ? T.lockTls : T.lockLan;
+
   // id de session = dernier segment du chemin /s/<id>
   var parts = location.pathname.split('/').filter(Boolean);
   var id = parts.length >= 2 && parts[0] === 's' ? parts[1] : '';
-  // __WS_PATH__ substitué par le serveur : "/ws" (app embarquée) ou "/ctrl" (relais).
-  var wsUrl = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '__WS_PATH__?id=' + id;
-  // PIN exigé par l'hôte ? (token substitué par le serveur)
-  var pinRequired = '__PIN_REQUIRED__' === '1';
-  var pin = '';
-  function fullWsUrl() { return wsUrl + (pin ? '&pin=' + encodeURIComponent(pin) : ''); }
-  function deepLink() { return 'edge2remote://control?ws=' + encodeURIComponent(fullWsUrl()); }
+  var wsUrl = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws/' + encodeURIComponent(id);
+  // Le PIN n'est JAMAIS mis dans une URL réseau : il part dans le 1er message WS.
+  var pin = '', token = '';
+  function deepLink() { return 'edge2remote://control?ws=' + encodeURIComponent(wsUrl) + '&pin=' + encodeURIComponent(pin); }
 
   var ws, live = document.getElementById('liveBar'),
       lt = document.getElementById('liveTitle'), ls = document.getElementById('liveSub');
   lt.textContent = T.connecting; ls.textContent = T.linking;
 
-  var afterPinGoApp = false;
-  function proceed() {
-    if (pinRequired && !pin) {
-      document.getElementById('pinGate').style.display = 'flex';
-      document.getElementById('pinInput').focus();
-    } else { finish(); }
+  var afterPinGoApp = false, denied = false, approved = false;
+  function askPin(bad) {
+    document.getElementById('pinErr').style.display = bad ? 'block' : 'none';
+    document.getElementById('pinGate').style.display = 'flex';
+    var inp = document.getElementById('pinInput'); inp.value = ''; inp.focus();
   }
+  function proceed() { if (!pin) askPin(false); else finish(); }
   function finish() { if (afterPinGoApp) location.href = deepLink(); else connect(); }
 
   document.getElementById('intro').style.display = 'flex';
@@ -217,18 +228,82 @@
   document.getElementById('openApp').onclick = function () { document.getElementById('intro').style.display = 'none'; afterPinGoApp = true; proceed(); };
   document.getElementById('openApp2').onclick = function () { afterPinGoApp = true; proceed(); };
   document.getElementById('pinOk').onclick = function () {
-    pin = document.getElementById('pinInput').value.trim();
+    pin = document.getElementById('pinInput').value.replace(/\D/g, '').slice(0, 6);
+    if (!pin) return;
     document.getElementById('pinGate').style.display = 'none';
+    denied = false;
     finish();
   };
 
+  function setLive(state) {
+    live.classList.toggle('off', state === 'off');
+    live.classList.toggle('wait', state === 'wait');
+    if (state === 'on') { lt.textContent = T.liveOn; ls.textContent = T.liveSub2; }
+    else if (state === 'wait') { lt.textContent = T.waiting; ls.textContent = T.waitingSub; }
+  }
+
   function connect() {
-    ws = new WebSocket(fullWsUrl());
-    ws.onopen = function () { live.classList.remove('off'); lt.textContent = T.liveOn; ls.textContent = T.liveSub2; };
-    ws.onclose = function () { live.classList.add('off'); lt.textContent = T.disconnected; ls.textContent = T.reconnecting; setTimeout(connect, 1000); };
+    if (ws && ws.readyState <= 1) return;
+    ws = new WebSocket(wsUrl);
+    ws.onopen = function () { ws.send('AUTH:' + pin + (token ? ':' + token : '')); setLive('wait'); };
+    ws.onmessage = function (e) {
+      var m = String(e.data);
+      if (m === 'DENIED') { denied = true; return; }
+      if (m.indexOf('TOKEN:') === 0) { token = m.slice(6); return; }
+      if (m.indexOf('STATE:') === 0) {
+        var st; try { st = JSON.parse(m.slice(6)); } catch (x) { return; }
+        approved = !!st.approved;
+        setLive(approved ? 'on' : 'wait');
+        renderToys((st.host && st.host.toys) || []);
+      }
+    };
+    ws.onclose = function () {
+      approved = false;
+      setLive('off');
+      if (denied) {
+        // PIN refusé ou accès refusé par l'hôte : pas de boucle de reconnexion
+        // (5 échecs = la session est brûlée côté hôte).
+        lt.textContent = T.disconnected; ls.textContent = T.ended;
+        if (!token) { pin = ''; askPin(true); }
+        return;
+      }
+      lt.textContent = T.disconnected; ls.textContent = T.reconnecting;
+      setTimeout(connect, 1500);
+    };
     ws.onerror = function () { ws.close(); };
   }
-  function send(msg) { if (ws && ws.readyState === 1) ws.send(msg); }
+
+  // --- Sélecteur de jouet (liste poussée par l'hôte ; noms = texte brut) ---
+  var target = -1, toysBox = document.getElementById('toys');
+  function renderToys(toys) {
+    if (target >= toys.length) target = -1;
+    toysBox.textContent = '';
+    if (toys.length < 2) return;
+    var mk = function (label, idx) {
+      var b = document.createElement('button');
+      b.className = 'chip' + (idx === target ? ' on' : '');
+      b.textContent = label;
+      b.onclick = function () { target = idx; renderToys(toys); };
+      toysBox.appendChild(b);
+    };
+    mk(T.allToys, -1);
+    toys.forEach(function (t, i) { mk(String(t.name || ('#' + (i + 1))).slice(0, 32), i); });
+  }
+  // Envoi coalescé : au plus ~20 envois/s par clé (M1, M2, B) — seule la
+  // dernière valeur compte. STOP part immédiatement et vide la file.
+  var pending = {}, flushTimer = null;
+  function flush() {
+    flushTimer = null;
+    if (!(ws && ws.readyState === 1 && approved)) { pending = {}; return; }
+    Object.keys(pending).forEach(function (k) { ws.send(pending[k]); });
+    pending = {};
+  }
+  function send(msg) {
+    var full = (target >= 0 ? '@' + target + ':' : '') + msg;
+    if (msg === 'S') { pending = {}; if (ws && ws.readyState === 1 && approved) ws.send(full); return; }
+    pending[msg.split(':')[0]] = full;
+    if (!flushTimer) flushTimer = setTimeout(flush, 50);
+  }
 
   var pad = document.getElementById('pad'), dot = document.getElementById('dot'),
       vx = document.getElementById('vx'), hy = document.getElementById('hy'),

@@ -15,7 +15,7 @@
     <string name="conn_connecting">Connexion…</string>
     <string name="conn_searching">Recherche de jouets à proximité…</string>
     <string name="conn_count">%1$d jouet(s) visible(s)</string>
-    <string name="conn_empty">Aucun jouet pour l\'instant. Allume-le (appui long 3 s) et rapproche-le.</string>
+    <string name="conn_empty">Aucun jouet pour l\'instant. Allume-le et rapproche-le. Marques : Lovense, We-Vibe, Vorze, Magic Motion (hors Lovense : expérimental).</string>
     <string name="conn_retry">Réessayer</string>
     <string name="conn_footer">Active le Bluetooth et la localisation si demandé.\nSeuls les jouets allumés et proches apparaissent.</string>
     <string name="device_signal">%1$d dBm · BLE direct</string>
@@ -27,19 +27,19 @@
     <string name="action_share">Partager</string>
     <string name="action_disconnect">Couper</string>
     <string name="hint_xy">Glisse le point — horizontal = base · vertical = tige</string>
-    <string name="hint_actuators">Règle chaque moteur du %1$s.</string>
+    <string name="hint_actuators">Règle chaque actionneur du %1$s.</string>
     <string name="label_base">BASE</string>
     <string name="label_tige">TIGE</string>
     <string name="preset_soft">Doux</string>
     <string name="preset_medium">Moyen</string>
     <string name="preset_strong">Fort</string>
     <string name="approve_title">Quelqu\'un veut prendre la main</string>
-    <string name="approve_body">Accepte seulement si tu sais qui c\'est. Tu peux couper à tout moment.</string>
+    <string name="approve_body">Quelqu\'un a le lien ET le code. Accepte seulement si tu sais qui c\'est. Tu peux couper à tout moment.</string>
     <string name="action_accept">Accepter</string>
     <string name="action_refuse">Refuser</string>
-    <string name="pin_label">Code à communiquer : %1$s</string>
+    <string name="pin_label">Code à communiquer (à part du lien) : %1$s</string>
     <string name="controlled_title">On te contrôle</string>
-    <string name="controlled_count">%1$d connecté(s) · BLE relayé</string>
+    <string name="controlled_count">%1$d contrôleur(s) accepté(s)</string>
     <string name="patterns_header">PRÉ-ENREGISTRÉ</string>
     <string name="playing_stop">EN LECTURE · STOP</string>
     <string name="pattern_tease">Tease</string>
@@ -58,9 +58,9 @@
     <string name="share_internet_preparing">Lien internet en préparation… (quelques secondes)</string>
     <string name="share_internet_hint">Ouvre ce lien de N\'IMPORTE OÙ (4G/autre réseau) :</string>
     <string name="share_lan_title">Même WiFi (LAN)</string>
-    <string name="share_lan_hint">Plus réactif sur le même WiFi :</string>
+    <string name="share_lan_hint">Même Wi-Fi uniquement — non chiffré, à réserver à un réseau de confiance :</string>
     <string name="share_none">Aucun lien de partage disponible. Vérifie l\'autorisation réseau de l\'app.</string>
-    <string name="share_warn">Tant que ce partage est ouvert, qui a le lien pilote le toy.</string>
+    <string name="share_warn">Il faut le lien ET le code, puis ton accord, pour piloter. 5 codes faux coupent le partage ; il expire après 30 min.</string>
     <string name="qr_desc">QR du lien de contrôle</string>
     <string name="action_copy">Copier</string>
     <string name="action_send">Envoyer</string>
@@ -88,7 +88,7 @@
     <string name="err_scanner">Scanner BLE indisponible</string>
     <string name="err_scan_failed">Scan échoué (code %1$d)</string>
     <string name="err_discovery">Découverte des services échouée</string>
-    <string name="err_chars">Caractéristiques Lovense introuvables</string>
+    <string name="err_chars">Service du jouet introuvable (modèle non reconnu)</string>
     <string name="err_notif">Activation notifications échouée</string>
     <string name="err_device_gone">Appareil introuvable</string>
 
@@ -96,4 +96,29 @@
     <string name="notif_channel">État de la connexion</string>
     <string name="notif_text">Connecté · contrôle actif</string>
     <string name="notif_stop">Couper</string>
+
+    <!-- Multi-jouets / multi-marques / sécurité du partage -->
+    <string name="conn_title_more">Ajoute un autre jouet</string>
+    <string name="brand_experimental">expérimental</string>
+    <string name="toys_all">Tous</string>
+    <string name="toys_add">+ Jouet</string>
+    <string name="toys_count">%1$d jouets</string>
+    <string name="toy_connecting">Connexion…</string>
+    <string name="toy_reconnecting">Reconnexion…</string>
+    <string name="toy_error">Erreur : %1$s</string>
+    <string name="action_remove">Retirer</string>
+    <string name="hint_all">Règle tous les jouets en même temps (ou choisis-en un ci-dessus).</string>
+    <string name="label_all">TOUS LES JOUETS</string>
+    <string name="label_m1">MOTEUR 1</string>
+    <string name="label_m2">MOTEUR 2</string>
+    <string name="hint_xy_generic">Glisse le point — horizontal = moteur 1 · vertical = moteur 2</string>
+    <string name="share_locked">Trop de codes erronés : le partage a été coupé par sécurité. Relance-le (nouveau lien et nouveau code).</string>
+    <string name="share_hostkey">La clé du relais internet a changé : lien internet bloqué (interception possible). Ne réaccepte que si tu es sûr·e.</string>
+    <string name="action_trust">Réaccepter la clé</string>
+    <string name="ctrl_confirm_title">Piloter un jouet à distance ?</string>
+    <string name="ctrl_confirm_body">Hôte : %1$s
+
+N\'accepte que si tu as reçu ce lien de quelqu\'un de confiance.</string>
+    <string name="ctrl_waiting">En attente de l\'accord de l\'hôte…</string>
+    <string name="ctrl_denied">Accès refusé ou session terminée</string>
 </resources>

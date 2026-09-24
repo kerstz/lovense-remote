@@ -45,6 +45,8 @@ fun XYPad(
     onChange: (base: Float, tige: Float) -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    xLabel: String = "BASE →",
+    yLabel: String = "TIGE →",
 ) {
     val c = Edge2.colors
     var size by remember { mutableStateOf(IntSize(1, 1)) }
@@ -121,7 +123,7 @@ fun XYPad(
 
         // Libellés d'axe.
         Text(
-            "BASE →",
+            xLabel,
             color = c.base.copy(alpha = .75f),
             fontWeight = FontWeight.SemiBold,
             fontSize = 9.sp,
@@ -129,7 +131,7 @@ fun XYPad(
             modifier = Modifier.align(Alignment.BottomStart).padding(start = 10.dp, bottom = 9.dp),
         )
         Text(
-            "TIGE →",
+            yLabel,
             color = c.tige.copy(alpha = .75f),
             fontWeight = FontWeight.SemiBold,
             fontSize = 9.sp,

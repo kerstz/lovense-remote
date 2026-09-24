@@ -18,9 +18,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -41,8 +42,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.edge2.remote.R
-import com.edge2.remote.ble.ConnectionState
 import com.edge2.remote.ble.DiscoveredToy
+import com.edge2.remote.ble.ScanState
 import com.edge2.remote.ui.theme.Edge2
 import com.edge2.remote.ui.theme.JetBrainsMono
 
@@ -94,21 +95,22 @@ fun PulseOrb(active: Boolean, modifier: Modifier = Modifier) {
 }
 
 /**
- * Écran connexion : orbe pulsé + **liste des toys réellement visibles**. Le scan
- * démarre à l'arrivée ; on n'affiche que les jouets `LVS-…` détectés à proximité,
- * et on connecte celui que l'utilisateur touche.
+ * Écran d'ajout de jouet : orbe pulsé + **liste des jouets réellement visibles**
+ * (toutes marques gérées). Le scan démarre à l'arrivée ; on connecte celui que
+ * l'utilisateur touche — plusieurs jouets peuvent être ajoutés successivement.
  */
 @Composable
 fun ConnectionScreen(
-    state: ConnectionState,
+    scanState: ScanState,
     discovered: List<DiscoveredToy>,
+    connectedCount: Int,
     onScan: () -> Unit,
     onSelect: (DiscoveredToy) -> Unit,
+    onBack: (() -> Unit)?,
     onSettings: () -> Unit = {},
 ) {
     val c = Edge2.colors
-    val connecting = state is ConnectionState.Connecting
-    val error = state as? ConnectionState.Error
+    val error = scanState as? ScanState.Error
 
     // Démarre (et redémarre) le scan dès que l'écran est affiché.
     LaunchedEffect(Unit) { onScan() }
@@ -117,11 +119,15 @@ fun ConnectionScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(c.bg)
+            .verticalScroll(rememberScrollState())
             .padding(horizontal = 26.dp, vertical = 18.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(11.dp)) {
+                if (onBack != null) {
+                    Text("←", color = c.ink, fontSize = 20.sp, modifier = Modifier.clickable { onBack() }.padding(end = 4.dp))
+                }
                 BrandMark(size = 30.dp)
                 Text(stringResource(R.string.conn_eyebrow), color = c.muted, fontWeight = FontWeight.Bold, fontSize = 12.sp, letterSpacing = 3.sp)
             }
@@ -129,11 +135,14 @@ fun ConnectionScreen(
         }
 
         Spacer(Modifier.size(4.dp))
-        Text(stringResource(R.string.conn_title), color = c.ink, fontWeight = FontWeight.Bold, fontSize = 26.sp)
+        Text(
+            stringResource(if (connectedCount > 0) R.string.conn_title_more else R.string.conn_title),
+            color = c.ink, fontWeight = FontWeight.Bold, fontSize = 26.sp,
+        )
 
-        PulseOrb(active = !connecting, modifier = Modifier.size(140.dp).align(Alignment.CenterHorizontally))
+        PulseOrb(active = scanState is ScanState.Scanning, modifier = Modifier.size(140.dp).align(Alignment.CenterHorizontally))
 
-        // Indicateur d'état du scan / connexion.
+        // Indicateur d'état du scan.
         Row(
             Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically,
@@ -143,7 +152,6 @@ fun ConnectionScreen(
             Text(
                 when {
                     error != null -> error.reason
-                    connecting -> stringResource(R.string.conn_connecting)
                     discovered.isEmpty() -> stringResource(R.string.conn_searching)
                     else -> stringResource(R.string.conn_count, discovered.size)
                 },
@@ -151,7 +159,7 @@ fun ConnectionScreen(
             )
         }
 
-        // Liste des toys visibles.
+        // Liste des jouets visibles.
         if (discovered.isEmpty()) {
             Text(
                 stringResource(R.string.conn_empty),
@@ -160,11 +168,12 @@ fun ConnectionScreen(
             )
         } else {
             discovered.forEach { toy ->
-                DeviceCard(toy = toy, connecting = connecting, onClick = { onSelect(toy) })
+                DeviceCard(toy = toy, onClick = { onSelect(toy) })
             }
         }
 
-        Spacer(Modifier.weight(1f))
+        // Pas de weight() dans une colonne défilante : simple espacement.
+        Spacer(Modifier.size(12.dp))
 
         if (error != null) {
             Text(
@@ -183,7 +192,7 @@ fun ConnectionScreen(
 }
 
 @Composable
-private fun DeviceCard(toy: DiscoveredToy, connecting: Boolean, onClick: () -> Unit) {
+private fun DeviceCard(toy: DiscoveredToy, onClick: () -> Unit) {
     val c = Edge2.colors
     Row(
         modifier = Modifier
@@ -191,7 +200,7 @@ private fun DeviceCard(toy: DiscoveredToy, connecting: Boolean, onClick: () -> U
             .clip(RoundedCornerShape(18.dp))
             .background(c.gradStart.copy(alpha = .12f))
             .border(1.dp, c.gradStart.copy(alpha = .42f), RoundedCornerShape(18.dp))
-            .clickable(enabled = !connecting) { onClick() }
+            .clickable { onClick() }
             .padding(15.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(13.dp),
@@ -206,16 +215,16 @@ private fun DeviceCard(toy: DiscoveredToy, connecting: Boolean, onClick: () -> U
             }
         }
         Column(Modifier.weight(1f)) {
-            Text(toy.displayName, color = c.ink, fontWeight = FontWeight.Bold, fontSize = 15.sp)
-            Text(stringResource(R.string.device_signal, toy.rssi), color = c.muted, fontFamily = JetBrainsMono, fontSize = 11.sp)
-        }
-        if (connecting) {
-            CircularProgressIndicator(Modifier.size(22.dp), color = Color.White, strokeWidth = 3.dp)
-        } else {
+            Text(toy.displayName, color = c.ink, fontWeight = FontWeight.Bold, fontSize = 15.sp, maxLines = 1)
             Text(
-                stringResource(R.string.action_connect), color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 12.sp,
-                modifier = Modifier.clip(RoundedCornerShape(11.dp)).background(c.gradStart).padding(horizontal = 15.dp, vertical = 9.dp),
+                toy.brand.displayName + (if (toy.brand.experimental) " · " + stringResource(R.string.brand_experimental) else "") +
+                    " · " + stringResource(R.string.device_signal, toy.rssi),
+                color = c.muted, fontFamily = JetBrainsMono, fontSize = 11.sp,
             )
         }
+        Text(
+            stringResource(R.string.action_connect), color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 12.sp,
+            modifier = Modifier.clip(RoundedCornerShape(11.dp)).background(c.gradStart).padding(horizontal = 15.dp, vertical = 9.dp),
+        )
     }
 }

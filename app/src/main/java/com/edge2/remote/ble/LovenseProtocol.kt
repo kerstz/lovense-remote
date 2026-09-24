@@ -6,7 +6,8 @@ import java.util.UUID
 import kotlin.math.roundToInt
 
 /**
- * Protocole BLE Lovense — confirmé pour l'Edge 2 (cf. PROTOCOL.md).
+ * Protocole BLE Lovense — confirmé pour l'Edge 2 (cf. PROTOCOL.md). Utilisé par
+ * [LovenseDriver].
  *
  * Résumé :
  *  - Commandes = chaînes ASCII terminées par `;`, écrites en WriteNoResponse
@@ -49,15 +50,20 @@ object LovenseProtocol {
     /** `PowerOff;` — éteint le toy. */
     fun powerOff(): ByteArray = "PowerOff;".toByteArray(Charsets.US_ASCII)
 
-    /** Commande d'un actionneur quelconque, bornée à sa plage propre. */
-    fun actuatorCommand(kind: ActuatorKind, level: Int): ByteArray {
-        val n = level.coerceIn(0, kind.max)
-        val s = when (kind) {
-            ActuatorKind.VIBRATE -> "Vibrate:$n;"
-            ActuatorKind.VIBRATE1 -> "Vibrate1:$n;"
-            ActuatorKind.VIBRATE2 -> "Vibrate2:$n;"
+    /**
+     * Commande de l'actionneur [index] de [toy], bornée à sa plage propre.
+     * Deux vibreurs → `Vibrate1:`/`Vibrate2:` ; un seul → `Vibrate:`.
+     */
+    fun actuatorCommand(toy: ToyType, index: Int, level: Int): ByteArray? {
+        val act = toy.actuators.getOrNull(index) ?: return null
+        val n = level.coerceIn(0, act.max)
+        val vibrators = toy.actuators.count { it.kind == ActuatorKind.VIBRATE }
+        val s = when (act.kind) {
+            ActuatorKind.VIBRATE ->
+                if (vibrators > 1) "Vibrate${toy.actuators.take(index + 1).count { it.kind == ActuatorKind.VIBRATE }}:$n;"
+                else "Vibrate:$n;"
             ActuatorKind.ROTATE -> "Rotate:$n;"
-            ActuatorKind.AIR -> "Air:Level:$n;"
+            ActuatorKind.SUCTION -> "Air:Level:$n;"
         }
         return s.toByteArray(Charsets.US_ASCII)
     }
@@ -92,8 +98,9 @@ object LovenseProtocol {
                     mac = parts.getOrElse(2) { "?" },
                 )
             }
-            // Batterie : un simple nombre, ex "85"
-            s.toIntOrNull() != null -> Reply.Battery(s.toInt())
+            // Batterie : un simple nombre, ex "85" (borné : un appareil hostile
+            // ou buggé ne doit pas pouvoir injecter une valeur absurde).
+            s.toIntOrNull() != null -> Reply.Battery(s.toInt().coerceIn(0, 100))
             else -> Reply.Unknown(s)
         }
     }

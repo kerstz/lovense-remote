@@ -1,3 +1,5 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -13,8 +15,8 @@ android {
         applicationId = "com.edge2.remote"
         minSdk = 26
         targetSdk = 35
-        versionCode = 2
-        versionName = "0.1.1"
+        versionCode = 3
+        versionName = "0.2.0"
         vectorDrawables { useSupportLibrary = true }
     }
 
@@ -55,8 +57,9 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    kotlinOptions { jvmTarget = "17" }
     buildFeatures { compose = true }
+    // Tests JVM : les stubs android.jar renvoient des valeurs par défaut au lieu de jeter.
+    testOptions { unitTests.isReturnDefaultValues = true }
 
     packaging {
         resources {
@@ -73,6 +76,11 @@ android {
             )
         }
     }
+}
+
+// Kotlin 2.2+ : le DSL `kotlinOptions` est déprécié → `compilerOptions`.
+kotlin {
+    compilerOptions { jvmTarget.set(JvmTarget.JVM_17) }
 }
 
 dependencies {
@@ -94,6 +102,9 @@ dependencies {
     // Tunnel internet par SSH (localhost.run) — stack JVM → DNS Android OK (4G).
     implementation(libs.sshj)
     implementation(libs.bcprov) // BouncyCastle complet (X25519 pour le KEX SSH)
+    // sshj tire bcpkix/bcutil 1.84 (CVE-2026-71889, CVE-2026-8763…) → forcés en 1.86.
+    implementation(libs.bcpkix)
+    implementation(libs.bcutil)
     implementation(libs.slf4j.simple) // logs sshj → logcat (diagnostic)
 
     implementation(platform(libs.androidx.compose.bom))
@@ -102,4 +113,6 @@ dependencies {
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
     debugImplementation(libs.androidx.ui.tooling)
+
+    testImplementation(libs.junit)
 }

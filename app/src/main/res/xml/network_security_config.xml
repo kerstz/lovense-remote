@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Le texte clair (ws://) reste nécessaire pour le contrôle sur le même Wi-Fi
+     (IP locale arbitraire, non exprimable ici). On ne fait confiance qu'aux
+     autorités système (jamais aux CA ajoutées par l'utilisateur). -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

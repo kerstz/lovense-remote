@@ -26,12 +26,17 @@ object LovenseTa {
             val kv = it.split(':', limit = 2)
             if (kv.size == 2) kv[0].trim() to kv[1].trim() else null
         }.toMap()
-        val name = fields["T"]?.takeIf { it.isNotBlank() } ?: fallbackName
+        // Nom borné et nettoyé (affiché dans l'UI).
+        val name = (fields["T"]?.takeIf { it.isNotBlank() } ?: fallbackName)
+            .filter { !it.isISOControl() }.take(MAX_NAME).ifBlank { "Lovense" }
 
         // Les valeurs peuvent être séparées par ';' ou ',' selon la version.
         val strengths = body.trim()
             .split(Regex("[;,\\s]+"))
+            .asSequence()
             .mapNotNull { it.toIntOrNull() }
+            .take(MAX_STEPS)
+            .toList()
         if (strengths.isEmpty()) return null
 
         val steps = strengths.map {
@@ -43,4 +48,8 @@ object LovenseTa {
 
     // Intensité max Lovense (0..20). Dupliqué ici pour éviter une dépendance ble→pattern.
     private const val LovenseProtocol_MAX = 20
+
+    /** Bornes anti-abus (fichier hostile) : ~2 h de pattern à 100 ms/pas. */
+    private const val MAX_STEPS = 72_000
+    private const val MAX_NAME = 40
 }

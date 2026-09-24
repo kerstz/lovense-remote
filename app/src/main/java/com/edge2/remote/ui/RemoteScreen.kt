@@ -7,6 +7,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -56,12 +57,12 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.edge2.remote.R
 import com.edge2.remote.RemoteViewModel
+import com.edge2.remote.ShareError
 import com.edge2.remote.ble.ActuatorKind
-import com.edge2.remote.ble.ConnectionState
-import com.edge2.remote.ble.ToyRegistry
-import com.edge2.remote.ble.ToyType
+import com.edge2.remote.ble.Brand
+import com.edge2.remote.ble.LinkState
+import com.edge2.remote.ble.ToyStatus
 import com.edge2.remote.pattern.BuiltinPatterns
-import com.edge2.remote.pattern.Pattern
 import com.edge2.remote.pattern.PatternPlayer
 import com.edge2.remote.remote.NetworkUtils
 import com.edge2.remote.ui.theme.Edge2
@@ -70,53 +71,64 @@ import kotlin.math.roundToInt
 import kotlin.math.sin
 
 /**
- * Écran principal (toy connecté) — design `Edge2 Remote.dc.html`, **adaptatif**
- * selon les actionneurs du toy : pad XY pour les toys à 2 vibreurs (Edge), sinon
- * un slider étiqueté par actionneur (vibration / rotation / succion).
+ * Écran principal — **multi-jouets** : un sélecteur (Tous / chaque jouet / + Jouet)
+ * choisit la cible ; les contrôles s'adaptent au jouet ciblé (pad XY pour 2
+ * vibreurs, sinon un slider par actionneur), ou un curseur maître pour « Tous ».
+ * Patterns et presets visent la cible courante ; STOP coupe toujours TOUT.
  */
 @Composable
-fun RemoteScreen(vm: RemoteViewModel, onDisconnect: () -> Unit, onSettings: () -> Unit = {}) {
+fun RemoteScreen(vm: RemoteViewModel, onAddToy: () -> Unit, onSettings: () -> Unit = {}) {
     val c = Edge2.colors
-    val state by vm.connectionState.collectAsStateWithLifecycle()
+    val toys by vm.toys.collectAsStateWithLifecycle()
+    val targetAddr by vm.target.collectAsStateWithLifecycle()
     val playing by vm.playing.collectAsStateWithLifecycle()
     val recording by vm.recording.collectAsStateWithLifecycle()
     val controllers by vm.controllers.collectAsStateWithLifecycle()
     val sharing by vm.sharing.collectAsStateWithLifecycle()
     val pin by vm.pin.collectAsStateWithLifecycle()
-    val approved by vm.approved.collectAsStateWithLifecycle()
-    val levels by vm.actuatorLevels.collectAsStateWithLifecycle()
     val shareUrl by vm.shareUrl.collectAsStateWithLifecycle()
     val tunnelUrl by vm.tunnelUrl.collectAsStateWithLifecycle()
     val tunnelPreparing by vm.tunnelPreparing.collectAsStateWithLifecycle()
+    val hostKeyMismatch by vm.tunnelHostKeyMismatch.collectAsStateWithLifecycle()
     val shareError by vm.shareError.collectAsStateWithLifecycle()
     val imported by vm.importedPatterns.collectAsStateWithLifecycle()
 
-    val connected = state as? ConnectionState.Connected
-    val toy = connected?.toy ?: ToyRegistry.generic
-    val battery = connected?.battery
+    // Jouet affiché : la cible choisie, ou le seul jouet s'il n'y en a qu'un.
+    val selected: ToyStatus? = toys.firstOrNull { it.address == targetAddr } ?: toys.singleOrNull()
     var shareOpen by remember { mutableStateOf(false) }
     var importOpen by remember { mutableStateOf(false) }
+    val approvedCount = controllers.count { it.approved }
+    val pending = controllers.firstOrNull { !it.approved }
 
-    // Dès qu'un contrôleur distant se connecte → on ferme la popup de partage.
-    LaunchedEffect(controllers) { if (controllers > 0) shareOpen = false }
+    // Dès qu'un contrôleur distant est accepté → on ferme la popup de partage.
+    LaunchedEffect(approvedCount) { if (approvedCount > 0) shareOpen = false }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(c.bg)
+            .verticalScroll(rememberScrollState())
             .padding(horizontal = 22.dp, vertical = 14.dp),
         verticalArrangement = Arrangement.spacedBy(13.dp),
     ) {
-        // --- En-tête : appareil + état + batterie + actions partage --------
+        // --- En-tête : cible + état + batterie + actions ------------------
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Column {
-                Text(toy.displayName, color = c.ink, fontWeight = FontWeight.Bold, fontSize = 21.sp)
+            Column(Modifier.weight(1f)) {
+                Text(
+                    selected?.displayName ?: stringResource(R.string.toys_count, toys.size),
+                    color = c.ink, fontWeight = FontWeight.Bold, fontSize = 21.sp, maxLines = 1,
+                )
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Box(Modifier.size(7.dp).clip(CircleShape).background(c.live))
-                    Text(stringResource(R.string.status_connected), color = c.live, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                    val ready = selected?.isReady ?: toys.any { it.isReady }
+                    Box(Modifier.size(7.dp).clip(CircleShape).background(if (ready) c.live else c.muted))
+                    Text(
+                        selected?.let { linkLabel(it) } ?: stringResource(R.string.status_connected),
+                        color = if (ready) c.live else c.muted, fontSize = 11.sp, fontWeight = FontWeight.Medium,
+                    )
                 }
             }
             Column(horizontalAlignment = Alignment.End) {
+                val battery = selected?.battery
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     BatteryGlyph(battery)
                     Text(battery?.let { stringResource(R.string.battery_fmt, it) } ?: "BLE", color = c.muted, fontFamily = JetBrainsMono, fontWeight = FontWeight.Medium, fontSize = 11.sp)
@@ -125,13 +137,20 @@ fun RemoteScreen(vm: RemoteViewModel, onDisconnect: () -> Unit, onSettings: () -
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     GhostChip("⚙") { onSettings() }
                     GhostChip(stringResource(R.string.action_share)) { vm.startSharing(); shareOpen = true }
-                    GhostChip(stringResource(R.string.action_disconnect)) { onDisconnect() }
+                    GhostChip(stringResource(R.string.action_disconnect)) {
+                        // Un jouet ciblé → on retire celui-là ; sinon on coupe tout.
+                        val t = toys.firstOrNull { it.address == targetAddr }
+                        if (t != null) vm.disconnect(t.address) else vm.disconnectAll()
+                    }
                 }
             }
         }
 
+        // --- Sélecteur de jouets ------------------------------------------
+        ToySelector(toys, targetAddr, onSelect = vm::selectTarget, onAdd = onAddToy)
+
         // --- « On contrôle » : un·e partenaire pilote à distance -----------
-        if (controllers > 0 && approved) {
+        if (approvedCount > 0) {
             Row(
                 Modifier.fillMaxWidth().clip(RoundedCornerShape(15.dp))
                     .background(c.live.copy(alpha = .12f))
@@ -143,19 +162,21 @@ fun RemoteScreen(vm: RemoteViewModel, onDisconnect: () -> Unit, onSettings: () -
                 Box(Modifier.size(10.dp).clip(CircleShape).background(c.live))
                 Column(Modifier.weight(1f)) {
                     Text(stringResource(R.string.controlled_title), color = c.ink, fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                    Text(stringResource(R.string.controlled_count, controllers), color = c.live, fontSize = 11.sp)
+                    Text(stringResource(R.string.controlled_count, approvedCount), color = c.live, fontSize = 11.sp)
                 }
+                GhostChip(stringResource(R.string.share_stop)) { vm.stopSharing() }
             }
         }
 
-        // --- Contrôle adapté au toy ----------------------------------------
-        if (toy.isDualVibrate) {
-            DualVibrateControls(vm, playing != null, levels)
-        } else {
-            ActuatorControls(vm, toy, playing != null, levels)
+        // --- Contrôle adapté à la cible ------------------------------------
+        when {
+            selected == null -> AllToysControls(vm, toys)
+            !selected.isReady -> ToyNotReady(selected) { vm.disconnect(selected.address) }
+            selected.toy.isDualVibrate -> DualVibrateControls(vm, selected, playing != null)
+            else -> ActuatorControls(vm, selected, playing != null)
         }
 
-        // --- Patterns pré-enregistrés (pilotent les actionneurs 0/1) -------
+        // --- Patterns (visent la cible : un jouet ou tous) ----------------
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Text(stringResource(R.string.patterns_header), color = c.faint, fontWeight = FontWeight.SemiBold, fontSize = 10.sp, letterSpacing = 2.5.sp)
             if (playing != null) {
@@ -169,13 +190,19 @@ fun RemoteScreen(vm: RemoteViewModel, onDisconnect: () -> Unit, onSettings: () -
                 }
             }
         }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            (BuiltinPatterns.all + imported).forEachIndexed { i, p ->
-                PatternChip(p.name, i, playing == p.name, Modifier.weight(1f)) {
-                    if (playing == p.name) vm.stopAll() else vm.playPattern(p)
+        (BuiltinPatterns.all + imported + listOf(null)).chunked(4).forEach { row ->
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                row.forEachIndexed { i, p ->
+                    if (p == null) {
+                        PatternChip("+ Lovense", -1, false, Modifier.weight(1f)) { importOpen = true }
+                    } else {
+                        PatternChip(p.name, i, playing == p.name, Modifier.weight(1f)) {
+                            if (playing == p.name) vm.stopAll() else vm.playPattern(p)
+                        }
+                    }
                 }
+                repeat(4 - row.size) { Spacer(Modifier.weight(1f)) }
             }
-            PatternChip("+ Lovense", -1, false, Modifier.weight(1f)) { importOpen = true }
         }
         // Tease (aléatoire) + Enregistrer (perform → pattern perso).
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -189,8 +216,8 @@ fun RemoteScreen(vm: RemoteViewModel, onDisconnect: () -> Unit, onSettings: () -
             Spacer(Modifier.weight(1f))
         }
 
-        // --- STOP géant pendant un partage (toujours accessible côté host) -
-        if (sharing) {
+        // --- STOP géant : partage en cours ou plusieurs jouets ------------
+        if (sharing || toys.size > 1) {
             Text(
                 stringResource(R.string.ctrl_stop_all),
                 color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp, letterSpacing = 2.sp,
@@ -202,14 +229,20 @@ fun RemoteScreen(vm: RemoteViewModel, onDisconnect: () -> Unit, onSettings: () -
     }
 
     if (shareOpen) {
-        ShareDialog(shareUrl, tunnelUrl, tunnelPreparing, shareError, pin) { vm.stopSharing(); shareOpen = false }
+        ShareDialog(
+            lanUrl = shareUrl, tunnelUrl = tunnelUrl, tunnelPreparing = tunnelPreparing,
+            hostKeyMismatch = hostKeyMismatch, shareError = shareError, pin = pin,
+            onTrustKey = vm::trustNewRelayKey,
+            onStop = { vm.stopSharing(); shareOpen = false },
+            onClose = { shareOpen = false },
+        )
     }
-    // Demande d'autorisation quand un contrôleur se connecte (avant de piloter).
-    if (sharing && controllers > 0 && !approved) {
+    // Demande d'autorisation PAR contrôleur authentifié (avant de piloter).
+    if (sharing && pending != null) {
         AlertDialog(
             onDismissRequest = { },
-            confirmButton = { TextButton(onClick = { vm.approveControl() }) { Text(stringResource(R.string.action_accept)) } },
-            dismissButton = { TextButton(onClick = { vm.refuseControl() }) { Text(stringResource(R.string.action_refuse)) } },
+            confirmButton = { TextButton(onClick = { vm.approveController(pending.id) }) { Text(stringResource(R.string.action_accept)) } },
+            dismissButton = { TextButton(onClick = { vm.refuseController(pending.id) }) { Text(stringResource(R.string.action_refuse)) } },
             title = { Text(stringResource(R.string.approve_title)) },
             text = { Text(stringResource(R.string.approve_body)) },
         )
@@ -223,28 +256,125 @@ fun RemoteScreen(vm: RemoteViewModel, onDisconnect: () -> Unit, onSettings: () -
     }
 }
 
-/** Toys à 2 vibreurs (Edge, Gemini, Hyphy) : pad XY + readouts + Link + presets. */
 @Composable
-private fun DualVibrateControls(vm: RemoteViewModel, playing: Boolean, levels: List<Int>) {
+private fun linkLabel(t: ToyStatus): String = when (val l = t.link) {
+    LinkState.Connected -> stringResource(R.string.status_connected)
+    LinkState.Connecting -> stringResource(R.string.toy_connecting)
+    LinkState.Reconnecting -> stringResource(R.string.toy_reconnecting)
+    is LinkState.Error -> stringResource(R.string.toy_error, l.reason)
+}
+
+/** Chips de sélection : « Tous » (si ≥ 2 jouets), un par jouet, et « + Jouet ». */
+@Composable
+private fun ToySelector(toys: List<ToyStatus>, target: String?, onSelect: (String?) -> Unit, onAdd: () -> Unit) {
+    val c = Edge2.colors
+    Row(
+        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        @Composable
+        fun chip(label: String, active: Boolean, dot: Color?, onClick: () -> Unit) {
+            Row(
+                Modifier.clip(RoundedCornerShape(12.dp))
+                    .background(if (active) c.gradStart.copy(alpha = .18f) else c.surface.copy(alpha = if (c.isDark) .35f else 1f))
+                    .border(1.dp, if (active) c.gradStart else c.outline, RoundedCornerShape(12.dp))
+                    .clickable { onClick() }
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                if (dot != null) Box(Modifier.size(6.dp).clip(CircleShape).background(dot))
+                Text(label, color = if (active) c.ink else c.muted, fontWeight = FontWeight.SemiBold, fontSize = 12.sp, maxLines = 1)
+            }
+        }
+        if (toys.size > 1) chip(stringResource(R.string.toys_all), target == null, null) { onSelect(null) }
+        toys.forEach { t ->
+            val dot = when (t.link) {
+                LinkState.Connected -> c.live
+                is LinkState.Error -> c.danger
+                else -> c.muted
+            }
+            val label = t.displayName + (t.battery?.let { " · $it%" } ?: "")
+            chip(label, toys.size > 1 && target == t.address, dot) { onSelect(t.address) }
+        }
+        chip(stringResource(R.string.toys_add), false, null) { onAdd() }
+    }
+}
+
+/** Jouet en cours de connexion / en erreur : état + bouton Retirer. */
+@Composable
+private fun ToyNotReady(t: ToyStatus, onRemove: () -> Unit) {
+    val c = Edge2.colors
+    Column(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(15.dp))
+            .border(1.dp, c.outline, RoundedCornerShape(15.dp)).padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Text(linkLabel(t), color = if (t.link is LinkState.Error) c.danger else c.muted, fontSize = 13.sp)
+        GhostChip(stringResource(R.string.action_remove)) { onRemove() }
+    }
+}
+
+/** Cible « Tous » : curseur maître appliqué à tous les actionneurs de tous les jouets. */
+@Composable
+private fun AllToysControls(vm: RemoteViewModel, toys: List<ToyStatus>) {
+    val c = Edge2.colors
+    var master by remember { mutableFloatStateOf(0f) }
+    Text(stringResource(R.string.hint_all), color = c.muted, fontSize = 11.sp, modifier = Modifier.fillMaxWidth())
+    ActuatorSlider(
+        label = stringResource(R.string.label_all), accent = c.base, fraction = master,
+        percent = (master * 100).roundToInt(), reversible = false, onReverse = {},
+        onChange = { f -> master = f; vm.setAll(null, f) },
+    )
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+        fun all(f: Float) { master = f; vm.setAll(null, f) }
+        PresetButton(stringResource(R.string.preset_soft), Modifier.weight(1f)) { all(0.30f) }
+        PresetButton(stringResource(R.string.preset_medium), Modifier.weight(1f)) { all(0.60f) }
+        PresetButton(stringResource(R.string.preset_strong), Modifier.weight(1f)) { all(0.90f) }
+    }
+    // Rappel de l'état de chaque jouet (niveau du 1er actionneur).
+    toys.forEach { t ->
+        val max = t.toy.actuators.firstOrNull()?.max ?: 1
+        val pct = ((t.levels.firstOrNull() ?: 0) * 100f / max).roundToInt()
+        Text("${t.displayName} · ${linkLabel(t)} · $pct%", color = c.faint, fontSize = 11.sp, fontFamily = JetBrainsMono)
+    }
+}
+
+/** Jouets à 2 vibreurs (Edge, Gemini, We-Vibe Sync…) : pad XY + readouts + Link + presets. */
+@Composable
+private fun DualVibrateControls(vm: RemoteViewModel, t: ToyStatus, playing: Boolean) {
     val c = Edge2.colors
     val link by vm.linkMode.collectAsStateWithLifecycle()
     // Drag manuel = vérité ; pendant un pattern, on suit les moteurs réels.
-    var localBase by remember { mutableFloatStateOf(0f) }
-    var localTige by remember { mutableFloatStateOf(0f) }
-    val baseF = if (playing) levels.getOrElse(0) { 0 } / 20f else localBase
-    val tigeF = if (playing) levels.getOrElse(1) { 0 } / 20f else localTige
+    var localBase by remember(t.address) { mutableFloatStateOf(0f) }
+    var localTige by remember(t.address) { mutableFloatStateOf(0f) }
+    val m1 = t.toy.actuators[0].max.toFloat()
+    val m2 = t.toy.actuators[1].max.toFloat()
+    val baseF = if (playing) t.levels.getOrElse(0) { 0 } / m1 else localBase
+    val tigeF = if (playing) t.levels.getOrElse(1) { 0 } / m2 else localTige
+    // Libellés BASE/TIGE propres à l'Edge ; génériques sinon.
+    val edge = t.toy.brand == Brand.LOVENSE && t.toy.code == "P"
+    val xLabel = stringResource(if (edge) R.string.label_base else R.string.label_m1)
+    val yLabel = stringResource(if (edge) R.string.label_tige else R.string.label_m2)
 
     fun applyXY(x: Float, y: Float) {
-        if (link) { val m = (x + y) / 2f; localBase = m; localTige = m; vm.setXY(m, m) }
-        else { localBase = x; localTige = y; vm.setXY(x, y) }
+        if (link) { val m = (x + y) / 2f; localBase = m; localTige = m; vm.setXY(t.address, m, m) }
+        else { localBase = x; localTige = y; vm.setXY(t.address, x, y) }
     }
-    fun preset(f: Float) { localBase = f; localTige = f; vm.setBoth(f) }
+    fun preset(f: Float) { localBase = f; localTige = f; vm.setAll(t.address, f) }
 
-    Text(stringResource(R.string.hint_xy), color = c.muted, fontSize = 11.sp, modifier = Modifier.fillMaxWidth())
-    XYPad(base = baseF, tige = tigeF, onChange = ::applyXY, modifier = Modifier.fillMaxWidth().aspectRatio(1f))
+    Text(
+        if (edge) stringResource(R.string.hint_xy) else stringResource(R.string.hint_xy_generic),
+        color = c.muted, fontSize = 11.sp, modifier = Modifier.fillMaxWidth(),
+    )
+    XYPad(
+        base = baseF, tige = tigeF, onChange = ::applyXY,
+        xLabel = "$xLabel →", yLabel = "$yLabel →",
+        modifier = Modifier.fillMaxWidth().aspectRatio(1f),
+    )
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(11.dp)) {
-        Readout(stringResource(R.string.label_base), c.base, (baseF * 100).roundToInt())
-        Readout(stringResource(R.string.label_tige), c.tige, (tigeF * 100).roundToInt())
+        Readout(xLabel, c.base, (baseF * 100).roundToInt())
+        Readout(yLabel, c.tige, (tigeF * 100).roundToInt())
     }
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(9.dp), verticalAlignment = Alignment.CenterVertically) {
         LinkToggle(link) { vm.toggleLink() }
@@ -254,28 +384,29 @@ private fun DualVibrateControls(vm: RemoteViewModel, playing: Boolean, levels: L
     }
 }
 
-/** Autres toys : un slider étiqueté par actionneur (+ bouton sens pour la rotation). */
+/** Autres jouets : un slider étiqueté par actionneur (+ bouton sens pour la rotation). */
 @Composable
-private fun ActuatorControls(vm: RemoteViewModel, toy: ToyType, playing: Boolean, levels: List<Int>) {
+private fun ActuatorControls(vm: RemoteViewModel, t: ToyStatus, playing: Boolean) {
     val c = Edge2.colors
-    val local = remember(toy) { mutableStateListOf<Float>().apply { repeat(toy.actuators.size) { add(0f) } } }
+    val toy = t.toy
+    val local = remember(t.address, toy) { mutableStateListOf<Float>().apply { repeat(toy.actuators.size) { add(0f) } } }
 
     Text(stringResource(R.string.hint_actuators, toy.displayName), color = c.muted, fontSize = 11.sp, modifier = Modifier.fillMaxWidth())
     toy.actuators.forEachIndexed { i, act ->
         val accent = when (act.kind) {
-            ActuatorKind.VIBRATE, ActuatorKind.VIBRATE1 -> c.base
-            ActuatorKind.VIBRATE2, ActuatorKind.ROTATE -> c.tige
-            ActuatorKind.AIR -> c.live
+            ActuatorKind.VIBRATE -> if (i == 0) c.base else c.tige
+            ActuatorKind.ROTATE -> c.tige
+            ActuatorKind.SUCTION -> c.live
         }
-        val value = if (playing && i < levels.size) levels[i] / act.max.toFloat() else local.getOrElse(i) { 0f }
+        val value = if (playing && i < t.levels.size) t.levels[i] / act.max.toFloat() else local.getOrElse(i) { 0f }
         ActuatorSlider(
             label = kindLabel(act.kind), accent = accent, fraction = value, percent = (value * 100).roundToInt(),
-            reversible = act.reversible, onReverse = { vm.reverse(i) },
-            onChange = { f -> if (i < local.size) local[i] = f; vm.setActuator(i, f) },
+            reversible = act.reversible, onReverse = { vm.reverse(t.address, i) },
+            onChange = { f -> if (i < local.size) local[i] = f; vm.setActuator(t.address, i, f) },
         )
     }
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-        fun all(f: Float) { for (i in local.indices) local[i] = f; vm.setBoth(f) }
+        fun all(f: Float) { for (i in local.indices) local[i] = f; vm.setAll(t.address, f) }
         PresetButton(stringResource(R.string.preset_soft), Modifier.weight(1f)) { all(0.30f) }
         PresetButton(stringResource(R.string.preset_medium), Modifier.weight(1f)) { all(0.60f) }
         PresetButton(stringResource(R.string.preset_strong), Modifier.weight(1f)) { all(0.90f) }
@@ -286,9 +417,9 @@ private fun ActuatorControls(vm: RemoteViewModel, toy: ToyType, playing: Boolean
 @Composable
 private fun kindLabel(kind: ActuatorKind): String = stringResource(
     when (kind) {
-        ActuatorKind.VIBRATE, ActuatorKind.VIBRATE1, ActuatorKind.VIBRATE2 -> R.string.kind_vibrate
+        ActuatorKind.VIBRATE -> R.string.kind_vibrate
         ActuatorKind.ROTATE -> R.string.kind_rotate
-        ActuatorKind.AIR -> R.string.kind_air
+        ActuatorKind.SUCTION -> R.string.kind_air
     },
 )
 
@@ -465,40 +596,57 @@ private fun BatteryGlyph(level: Int?) {
 // --- Dialogs (Phase 4B + import) — héritent du thème Edge2 -----------------
 
 @Composable
-private fun ShareDialog(lanUrl: String?, tunnelUrl: String?, tunnelPreparing: Boolean, shareError: Boolean, pin: String?, onDismiss: () -> Unit) {
+private fun ShareDialog(
+    lanUrl: String?,
+    tunnelUrl: String?,
+    tunnelPreparing: Boolean,
+    hostKeyMismatch: Boolean,
+    shareError: ShareError,
+    pin: String?,
+    onTrustKey: () -> Unit,
+    onStop: () -> Unit,
+    onClose: () -> Unit,
+) {
     val c = Edge2.colors
     AlertDialog(
-        onDismissRequest = onDismiss,
-        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.share_stop)) } },
+        onDismissRequest = onClose,
+        confirmButton = { TextButton(onClick = onStop) { Text(stringResource(R.string.share_stop)) } },
+        dismissButton = { TextButton(onClick = onClose) { Text(stringResource(R.string.action_close)) } },
         title = { Text(stringResource(R.string.share_title)) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                if (shareError) {
-                    Text(stringResource(R.string.share_blocked), color = c.danger)
-                } else {
-                    if (pin != null) {
-                        Text(
-                            stringResource(R.string.pin_label, pin),
-                            color = c.base, fontWeight = FontWeight.Bold, fontSize = 16.sp,
-                            fontFamily = JetBrainsMono,
-                        )
+                when (shareError) {
+                    ShareError.BLOCKED -> Text(stringResource(R.string.share_blocked), color = c.danger)
+                    ShareError.LOCKED -> Text(stringResource(R.string.share_locked), color = c.danger)
+                    ShareError.NONE -> {
+                        if (pin != null) {
+                            Text(
+                                stringResource(R.string.pin_label, pin),
+                                color = c.base, fontWeight = FontWeight.Bold, fontSize = 16.sp,
+                                fontFamily = JetBrainsMono,
+                            )
+                        }
+                        // Internet (SSH/localhost.run) — marche de partout, 4G inclus.
+                        when {
+                            hostKeyMismatch -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text(stringResource(R.string.share_hostkey), color = c.danger)
+                                GhostChip(stringResource(R.string.action_trust)) { onTrustKey() }
+                            }
+                            tunnelUrl != null -> ShareBlock(
+                                stringResource(R.string.share_internet_connected),
+                                stringResource(R.string.share_internet_hint), tunnelUrl,
+                            )
+                            tunnelPreparing -> Text(stringResource(R.string.share_internet_preparing), color = c.muted)
+                        }
+                        // LAN (Wi-Fi/Ethernet) — plus réactif, mais HTTP non chiffré.
+                        if (lanUrl != null) {
+                            ShareBlock(stringResource(R.string.share_lan_title), stringResource(R.string.share_lan_hint), lanUrl)
+                        }
+                        if (lanUrl == null && tunnelUrl == null && !tunnelPreparing) {
+                            Text(stringResource(R.string.share_none))
+                        }
+                        Text(stringResource(R.string.share_warn), style = MaterialTheme.typography.bodySmall)
                     }
-                    // Internet (SSH/localhost.run) — marche de partout, 4G inclus.
-                    when {
-                        tunnelUrl != null -> ShareBlock(
-                            stringResource(R.string.share_internet_connected),
-                            stringResource(R.string.share_internet_hint), tunnelUrl,
-                        )
-                        tunnelPreparing -> Text(stringResource(R.string.share_internet_preparing), color = c.muted)
-                    }
-                    // LAN (Wi-Fi/Ethernet) — plus réactif sur le même réseau.
-                    if (lanUrl != null) {
-                        ShareBlock(stringResource(R.string.share_lan_title), stringResource(R.string.share_lan_hint), lanUrl)
-                    }
-                    if (lanUrl == null && tunnelUrl == null && !tunnelPreparing) {
-                        Text(stringResource(R.string.share_none))
-                    }
-                    Text(stringResource(R.string.share_warn), style = MaterialTheme.typography.bodySmall)
                 }
             }
         },

@@ -1,6 +1,5 @@
 package com.edge2.remote.pattern
 
-import com.edge2.remote.ble.Edge2BleManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -11,12 +10,18 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlin.random.Random
 
+/** Destination des niveaux d'un pattern (m1/m2 sur l'échelle 0..20). */
+interface PatternSink {
+    fun apply(m1: Int, m2: Int)
+    fun stopAll()
+}
+
 /**
- * Joue un [Pattern] en envoyant les intensités au toy via [Edge2BleManager],
+ * Joue un [Pattern] en envoyant les intensités aux jouets via [sink],
  * éventuellement en boucle. Une seule lecture à la fois.
  */
 class PatternPlayer(
-    private val ble: Edge2BleManager,
+    private val sink: PatternSink,
     private val scope: CoroutineScope,
 ) {
     /** Nom du pattern en cours de lecture, ou null si arrêté. */
@@ -33,14 +38,13 @@ class PatternPlayer(
             do {
                 for (step in pattern.steps) {
                     if (!isActive) break
-                    // m1/m2 → actionneurs 0/1 (ignoré si le toy en a moins).
-                    ble.setActuator(0, step.m1)
-                    ble.setActuator(1, step.m2)
+                    // m1/m2 → actionneurs 0/1 (ignoré si le jouet en a moins).
+                    sink.apply(step.m1, step.m2)
                     delay(step.durationMs.coerceAtLeast(10))
                 }
             } while (pattern.loop && isActive)
             _playing.value = null
-            ble.stopAll()
+            sink.stopAll()
         }
     }
 
@@ -56,24 +60,24 @@ class PatternPlayer(
             while (isActive) {
                 if (Random.nextInt(6) == 0) {
                     // Pause taquine.
-                    ble.setActuator(0, 0); ble.setActuator(1, 0)
+                    sink.apply(0, 0)
                     delay(Random.nextLong(400, 1400))
                 } else {
                     val a = Random.nextInt(4, ceiling.coerceAtMost(20) + 1)
                     val b = if (Random.nextBoolean()) a else Random.nextInt(4, ceiling.coerceAtMost(20) + 1)
-                    ble.setActuator(0, a); ble.setActuator(1, b)
+                    sink.apply(a, b)
                     delay(Random.nextLong(250, 1100))
                 }
                 if (ceiling < 20) ceiling++
             }
-            ble.stopAll()
+            sink.stopAll()
         }
     }
 
     /** Stoppe la lecture ET coupe les moteurs. */
     fun stop() {
         cancelJob()
-        ble.stopAll()
+        sink.stopAll()
     }
 
     /** Annule la lecture SANS couper les moteurs (reprise manuelle immédiate). */

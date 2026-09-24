@@ -3,6 +3,8 @@ package com.edge2.remote.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,7 +18,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -43,59 +47,100 @@ import com.edge2.remote.ui.theme.JetBrainsMono
 import kotlin.math.roundToInt
 
 /**
- * Écran CONTRÔLEUR natif : ouvert par deep link `edge2remote://control?ws=…`.
- * Pilote le toy d'un host distant via WebSocket — même pad XY que l'écran principal.
+ * Écran CONTRÔLEUR natif : ouvert par deep link `edge2remote://control?ws=…&pin=…`.
+ * L'utilisateur confirme d'abord l'hôte (un site tiers peut déclencher ce lien),
+ * puis pilote les jouets de l'hôte via WebSocket — même pad XY que l'écran principal.
  */
 @Composable
-fun ControllerScreen(wsUrl: String) {
+fun ControllerScreen(wsUrl: String, pin: String, onExit: () -> Unit) {
+    var confirmed by remember { mutableStateOf(false) }
+    if (!confirmed) {
+        val host = remember(wsUrl) { runCatching { java.net.URI(wsUrl).host }.getOrNull().orEmpty() }
+        AlertDialog(
+            onDismissRequest = onExit,
+            confirmButton = { TextButton(onClick = { confirmed = true }) { Text(stringResource(R.string.action_connect)) } },
+            dismissButton = { TextButton(onClick = onExit) { Text(stringResource(R.string.action_cancel)) } },
+            title = { Text(stringResource(R.string.ctrl_confirm_title)) },
+            text = { Text(stringResource(R.string.ctrl_confirm_body, host)) },
+        )
+        return
+    }
+    ControllerContent(wsUrl, pin)
+}
+
+@Composable
+private fun ControllerContent(wsUrl: String, pin: String) {
     val c = Edge2.colors
     val scope = rememberCoroutineScope()
     val controller = remember { RemoteController(scope) }
-    val connected by controller.connected.collectAsStateWithLifecycle()
+    val phase by controller.phase.collectAsStateWithLifecycle()
+    val toys by controller.toys.collectAsStateWithLifecycle()
+    val live = phase == RemoteController.Phase.LIVE
 
     DisposableEffect(wsUrl) {
-        controller.connect(wsUrl)
+        controller.connect(wsUrl, pin)
         onDispose { controller.release() }
     }
 
     var base by remember { mutableFloatStateOf(0f) }
     var tige by remember { mutableFloatStateOf(0f) }
     var link by remember { mutableStateOf(false) }
+    var chosen by remember { mutableStateOf<Int?>(null) }
+    // Cible effective (la liste de l'hôte a pu raccourcir).
+    val target = chosen?.takeIf { it < toys.size }
     fun lvl(f: Float) = (f * 20).roundToInt()
 
     fun applyXY(x: Float, y: Float) {
-        if (link) { val m = (x + y) / 2f; base = m; tige = m; controller.send(RemoteCommand.SetBoth(lvl(m))) }
-        else { base = x; tige = y; controller.send(RemoteCommand.SetMotor(1, lvl(x))); controller.send(RemoteCommand.SetMotor(2, lvl(y))) }
+        if (link) { val m = (x + y) / 2f; base = m; tige = m; controller.send(RemoteCommand.SetBoth(lvl(m), target)) }
+        else { base = x; tige = y; controller.send(RemoteCommand.SetMotor(1, lvl(x), target)); controller.send(RemoteCommand.SetMotor(2, lvl(y), target)) }
     }
-    fun preset(f: Float) { base = f; tige = f; controller.send(RemoteCommand.SetBoth(lvl(f))) }
-    fun stopAll() { base = 0f; tige = 0f; controller.send(RemoteCommand.Stop) }
+    fun preset(f: Float) { base = f; tige = f; controller.send(RemoteCommand.SetBoth(lvl(f), target)) }
+    fun stopAll() { base = 0f; tige = 0f; controller.send(RemoteCommand.Stop(target)) }
 
     Column(
         Modifier.fillMaxSize().background(c.bg).padding(horizontal = 22.dp, vertical = 14.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        // Bannière « en direct ».
+        // Bannière d'état.
+        val (title, dot) = when (phase) {
+            RemoteController.Phase.LIVE -> stringResource(R.string.ctrl_live) to c.live
+            RemoteController.Phase.WAITING -> stringResource(R.string.ctrl_waiting) to c.muted
+            RemoteController.Phase.DENIED -> stringResource(R.string.ctrl_denied) to c.danger
+            RemoteController.Phase.CONNECTING -> stringResource(R.string.ctrl_connecting) to c.muted
+        }
         Row(
             Modifier.fillMaxWidth().clip(RoundedCornerShape(15.dp))
-                .background(c.live.copy(alpha = .12f))
-                .border(1.dp, c.live.copy(alpha = .28f), RoundedCornerShape(15.dp))
+                .background(dot.copy(alpha = .12f))
+                .border(1.dp, dot.copy(alpha = .28f), RoundedCornerShape(15.dp))
                 .padding(15.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(11.dp),
         ) {
-            Box(Modifier.size(10.dp).clip(CircleShape).background(if (connected) c.live else c.muted))
+            Box(Modifier.size(10.dp).clip(CircleShape).background(dot))
             Column(Modifier.weight(1f)) {
-                Text(if (connected) stringResource(R.string.ctrl_live) else stringResource(R.string.ctrl_connecting), color = c.ink, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
-                Text(stringResource(R.string.ctrl_sub), color = if (connected) c.live else c.muted, fontSize = 11.sp)
+                Text(title, color = c.ink, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                Text(stringResource(R.string.ctrl_sub), color = if (live) c.live else c.muted, fontSize = 11.sp)
             }
         }
 
-        Text(stringResource(R.string.hint_xy), color = c.muted, fontSize = 11.sp)
+        // Sélecteur de jouet de l'hôte (si plusieurs).
+        if (toys.size > 1) {
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                CtrlPreset(stringResource(R.string.toys_all), Modifier, active = target == null) { chosen = null }
+                toys.forEachIndexed { i, name -> CtrlPreset(name, Modifier, active = target == i) { chosen = i } }
+            }
+        }
 
-        XYPad(base = base, tige = tige, onChange = ::applyXY, enabled = connected, modifier = Modifier.fillMaxWidth().aspectRatio(1f))
+        Text(stringResource(R.string.hint_xy_generic), color = c.muted, fontSize = 11.sp)
+
+        XYPad(
+            base = base, tige = tige, onChange = ::applyXY, enabled = live,
+            xLabel = stringResource(R.string.label_m1) + " →", yLabel = stringResource(R.string.label_m2) + " →",
+            modifier = Modifier.fillMaxWidth().aspectRatio(1f),
+        )
 
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(11.dp)) {
-            CtrlReadout(stringResource(R.string.label_base), c.base, (base * 100).roundToInt())
-            CtrlReadout(stringResource(R.string.label_tige), c.tige, (tige * 100).roundToInt())
+            CtrlReadout(stringResource(R.string.label_m1), c.base, (base * 100).roundToInt())
+            CtrlReadout(stringResource(R.string.label_m2), c.tige, (tige * 100).roundToInt())
         }
 
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(9.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -155,13 +200,13 @@ private fun CtrlLink(active: Boolean, onClick: () -> Unit) {
 }
 
 @Composable
-private fun CtrlPreset(label: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
+private fun CtrlPreset(label: String, modifier: Modifier = Modifier, active: Boolean = false, onClick: () -> Unit) {
     val c = Edge2.colors
     Text(
-        label, color = c.ink, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, textAlign = TextAlign.Center,
+        label, color = c.ink, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, textAlign = TextAlign.Center, maxLines = 1,
         modifier = modifier.clip(RoundedCornerShape(13.dp))
-            .background(c.surface.copy(alpha = if (c.isDark) .35f else 1f))
-            .border(1.dp, c.outline, RoundedCornerShape(13.dp))
-            .clickable { onClick() }.padding(vertical = 13.dp),
+            .background(if (active) c.gradStart.copy(alpha = .18f) else c.surface.copy(alpha = if (c.isDark) .35f else 1f))
+            .border(1.dp, if (active) c.gradStart else c.outline, RoundedCornerShape(13.dp))
+            .clickable { onClick() }.padding(vertical = 13.dp, horizontal = 12.dp),
     )
 }
