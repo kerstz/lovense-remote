@@ -68,6 +68,8 @@ android {
                 "META-INF/io.netty.versions.properties",
                 "META-INF/*.kotlin_module",
                 "META-INF/{AL2.0,LGPL2.1}",
+                // License/notice files duplicated across deps (e.g. BouncyCastle 1.86).
+                "META-INF/{LICENSE,LICENSE.md,LICENSE.txt,NOTICE,NOTICE.md,NOTICE.txt,DEPENDENCIES}",
                 // BouncyCastle signatures (sshj) — avoids packaging conflicts.
                 "META-INF/BC*.SF",
                 "META-INF/BC*.DSA",
