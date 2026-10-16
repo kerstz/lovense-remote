@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.Context
 import android.os.Build
 import android.os.Bundle
+import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -40,6 +41,11 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Privacy: block screenshots / screen recording and blank the Recents
+        // thumbnail. The share PIN, QR code and link (shown in a Compose Dialog,
+        // which inherits this flag via SecureFlagPolicy.Inherit) and the
+        // controller screen must not leak through captures.
+        window.setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE)
         enableEdgeToEdge()
         // Controller deep link: edge2remote://control?ws=<ws url>&pin=<code>.
         // Any website can fire this link → strictly validated URL, then explicit

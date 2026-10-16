@@ -98,6 +98,7 @@
     <!-- Foreground service notification -->
     <string name="notif_channel">État de la connexion</string>
     <string name="notif_text">Connecté · contrôle actif</string>
+    <string name="notif_public_title">Appareil connecté</string>
     <string name="notif_stop">Couper</string>
 
     <!-- Multi-toy / multi-brand / sharing security -->

@@ -63,8 +63,16 @@ class RemoteForegroundService : Service() {
         val stop = PendingIntent.getService(
             this, 1, Intent(this, RemoteForegroundService::class.java).setAction(ACTION_STOP), flags,
         )
+        // Lock screen: only a neutral, generic version is shown (no toy name, no
+        // app-specific wording) — the toy names are intimate data.
+        val public = NotificationCompat.Builder(this, CHANNEL)
+            .setSmallIcon(R.drawable.ic_stat_remote)
+            .setContentTitle(getString(R.string.notif_public_title))
+            .build()
         return NotificationCompat.Builder(this, CHANNEL)
             .setSmallIcon(R.drawable.ic_stat_remote)
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+            .setPublicVersion(public)
             .setContentTitle(name)
             .setContentText(getString(R.string.notif_text))
             .setOngoing(true)

@@ -97,6 +97,7 @@
     <!-- Foreground service notification -->
     <string name="notif_channel">Estado de la conexión</string>
     <string name="notif_text">Conectado · control activo</string>
+    <string name="notif_public_title">Dispositivo conectado</string>
     <string name="notif_stop">Desconectar</string>
 
     <!-- Multi-toy / multi-brand / sharing security -->
