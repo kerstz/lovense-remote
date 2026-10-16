@@ -1,0 +1,37 @@
+name: 🧸 Toy report
+description: Tell us whether your toy works (or doesn't) — the most useful feedback for this project.
+labels: [toy-report]
+body:
+  - type: input
+    id: toy
+    attributes:
+      label: Toy (brand + model)
+      placeholder: Satisfyer Curvy 1+
+    validations: { required: true }
+  - type: input
+    id: ble_name
+    attributes:
+      label: Name shown in a BLE scanner app (nRF Connect…)
+      description: Needed if the toy is missing from the scan.
+  - type: dropdown
+    id: result
+    attributes:
+      label: Result
+      options:
+        - Works fully
+        - Works partially (some functions don't)
+        - Connects but nothing happens
+        - Doesn't show up in the scan
+        - Can't connect
+    validations: { required: true }
+  - type: textarea
+    id: details
+    attributes:
+      label: Details
+      description: Which functions work? Any pairing step needed? Logcat output helps (`adb logcat | grep edge2`).
+  - type: input
+    id: version
+    attributes:
+      label: App version + Android version / phone
+      placeholder: 0.2.0 · Android 15 · Pixel 8
+    validations: { required: true }

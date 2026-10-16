@@ -1,0 +1,8 @@
+* text=auto eol=lf
+*.png binary
+*.ttf binary
+gradlew.bat text eol=crlf
+*.jar binary
+# Keep GitHub's language stats about the app, not the generated protocol tables.
+app/src/main/assets/devices.json linguist-generated
+docs/SUPPORTED_TOYS.md linguist-generated
