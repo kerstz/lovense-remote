@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/logo.svg" width="104" alt="Lovense Remote logo">
+<img src="docs/social-preview.png" width="100%" alt="Lovense Remote: one remote for 800+ toys">
 
 # Lovense Remote
 
@@ -19,6 +19,7 @@ controlled straight from your Android phone over Bluetooth —
   <img src="https://img.shields.io/badge/Android-8.0%2B-46E0A0?style=flat-square" alt="Android 8+">
   <img src="https://img.shields.io/badge/100%25-AOSP%20·%20no%20Google-46E0A0?style=flat-square" alt="AOSP">
   <img src="https://img.shields.io/badge/i18n-EN%20·%20FR%20·%20ES-A98BFF?style=flat-square" alt="i18n">
+  <a href="https://github.com/kerstz/lovense-remote/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/kerstz/lovense-remote/ci.yml?branch=main&style=flat-square&label=CI" alt="CI"></a>
   <img src="https://img.shields.io/github/v/release/kerstz/lovense-remote?style=flat-square&color=FF8BA1" alt="Release">
 </p>
 
@@ -28,6 +29,10 @@ controlled straight from your Android phone over Bluetooth —
 
 **[⬇️ Download the APK](https://github.com/kerstz/lovense-remote/releases/latest)** ·
 **[🧸 Is my toy supported?](docs/SUPPORTED_TOYS.md)**
+
+
+🌐 **[Website & toy search](https://kerstz.github.io/lovense-remote/)** ·
+⭐ **Useful? Star the repo** — it's how other people find it.
 
 </div>
 
@@ -185,6 +190,7 @@ ANDROID_HOME=~/Android/Sdk ./gradlew :app:assembleDebug   # build
 ```
 
 Kotlin + Jetpack Compose · minSdk 26 · target/compile SDK 35.
+See [CONTRIBUTING.md](CONTRIBUTING.md), [CHANGELOG.md](CHANGELOG.md) and [SECURITY.md](SECURITY.md).
 
 <details>
 <summary>🧩 Architecture</summary>
@@ -220,3 +226,15 @@ the Buttplug / Intiface community for years of reverse engineering.
 > 🤖 **Vibe coded** — this app was largely written with an AI coding assistant,
 > then reviewed and tested by hand. Read the code (and the security section)
 > before trusting it with anything that matters.
+
+---
+
+<div align="center">
+
+## ⭐ Star history
+
+<a href="https://star-history.com/#kerstz/lovense-remote&Date">
+  <img src="https://api.star-history.com/svg?repos=kerstz/lovense-remote&type=Date" width="620" alt="Star history chart">
+</a>
+
+</div>

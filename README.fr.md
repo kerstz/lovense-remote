@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/logo.svg" width="104" alt="Logo Lovense Remote">
+<img src="docs/social-preview.png" width="100%" alt="Lovense Remote: one remote for 800+ toys">
 
 # Lovense Remote
 
@@ -19,6 +19,7 @@ pilotés directement depuis ton téléphone Android en Bluetooth —
   <img src="https://img.shields.io/badge/Android-8.0%2B-46E0A0?style=flat-square" alt="Android 8+">
   <img src="https://img.shields.io/badge/100%25-AOSP%20·%20sans%20Google-46E0A0?style=flat-square" alt="AOSP">
   <img src="https://img.shields.io/badge/Langues-EN%20·%20FR%20·%20ES-A98BFF?style=flat-square" alt="Langues">
+  <a href="https://github.com/kerstz/lovense-remote/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/kerstz/lovense-remote/ci.yml?branch=main&style=flat-square&label=CI" alt="CI"></a>
   <img src="https://img.shields.io/github/v/release/kerstz/lovense-remote?style=flat-square&color=FF8BA1" alt="Release">
 </p>
 
@@ -28,6 +29,10 @@ pilotés directement depuis ton téléphone Android en Bluetooth —
 
 **[⬇️ Télécharger l'APK](https://github.com/kerstz/lovense-remote/releases/latest)** ·
 **[🧸 Mon toy est-il compatible ?](docs/SUPPORTED_TOYS.md)**
+
+
+🌐 **[Site web & recherche de jouet](https://kerstz.github.io/lovense-remote/)** ·
+⭐ **Utile ? Mets une étoile** — c'est comme ça que les autres le trouvent.
 
 </div>
 
@@ -189,6 +194,7 @@ ANDROID_HOME=~/Android/Sdk ./gradlew :app:assembleDebug   # compilation
 ```
 
 Kotlin + Jetpack Compose · minSdk 26 · target/compile SDK 35.
+Voir [CONTRIBUTING.md](CONTRIBUTING.md), [CHANGELOG.md](CHANGELOG.md) et [SECURITY.md](SECURITY.md).
 
 <details>
 <summary>🧩 Architecture</summary>
@@ -223,3 +229,15 @@ la communauté Buttplug / Intiface pour des années de rétro-ingénierie.
 > 🤖 **Vibe codé** — cette app a été écrite en grande partie avec un assistant de
 > code IA, puis relue et testée à la main. Lis le code (et la section sécurité)
 > avant de lui confier quoi que ce soit d'important.
+
+---
+
+<div align="center">
+
+## ⭐ Historique des étoiles
+
+<a href="https://star-history.com/#kerstz/lovense-remote&Date">
+  <img src="https://api.star-history.com/svg?repos=kerstz/lovense-remote&type=Date" width="620" alt="Star history chart">
+</a>
+
+</div>
