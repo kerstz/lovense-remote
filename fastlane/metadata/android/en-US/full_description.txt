@@ -11,6 +11,8 @@ Features:
 * French / English / Spanish; dark and light themes.
 * 100% AOSP, no Google Play Services.
 
-Internet sharing routes traffic through localhost.run (a third party). Experimental community project — not affiliated with, or endorsed by, Lovense or any other brand.
+Internet sharing is optional and asks for your consent first: it routes traffic through localhost.run (a third party). Privacy policy: https://github.com/kerstz/lovense-remote/blob/main/PRIVACY.md
+
+Experimental community project — not affiliated with, or endorsed by, Lovense or any other brand.
 
 "Vibe coded" project: largely written with an AI coding assistant, then reviewed and tested by hand.

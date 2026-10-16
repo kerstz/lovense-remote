@@ -131,13 +131,19 @@ sur le **bouton d'allumage** des toys Lelo, entre le **PIN 6496** sur Lioness.
 
 ## 🔗 Contrôle à distance par lien
 
-1. Touche **Partager** : tu obtiens un lien *Même Wi-Fi* et un lien *Internet*.
+1. Touche **Partager** : tu obtiens un lien *Même Wi-Fi*. Le lien *Internet* est
+   optionnel : il n'est créé qu'après avoir accepté que le trafic passe par le
+   relais tiers localhost.run.
 2. Envoie le lien à ton/ta partenaire, et donne-lui le **PIN à 6 chiffres** à part.
 3. Quand il/elle l'ouvre, **tu l'acceptes** sur ton téléphone. Seulement là, il/elle
    peut piloter tes toys, depuis n'importe quel navigateur — sans app de son côté.
 4. Arrête le partage quand tu veux ; il expire aussi tout seul après 30 minutes.
+   Quand le contrôle cesse (partage arrêté ou expiré, contrôleur parti ou
+   éjecté, tuile STOP), tes toys s'arrêtent aussi.
 
 ## 🔒 Sécurité & vie privée
+
+Lis la [politique de confidentialité](PRIVACY.md#politique-de-confidentialité) complète.
 
 Connaître le lien ne suffit jamais pour piloter tes toys :
 
@@ -155,6 +161,8 @@ Connaître le lien ne suffit jamais pour piloter tes toys :
 - **Clé du relais mémorisée** — personne ne peut se faire passer pour le relais internet.
 - **Aucune sauvegarde** des données de l'app ; les deep links sont validés et
   demandent ta confirmation.
+- **Discrétion** — captures d'écran bloquées, contenu masqué dans les apps
+  récentes, notification neutre sur l'écran verrouillé.
 
 **Limites à connaître :** le partage sur le même Wi-Fi est en HTTP non chiffré
 (utilise un Wi-Fi de confiance). Le partage internet passe par
@@ -185,7 +193,14 @@ de commandes que les apps officielles, et seulement sur les canaux connus pour c
 <summary><b>Pourquoi « Lovense Remote » si d'autres marques sont prises en charge ?</b></summary>
 
 Le projet a commencé comme télécommande Lovense uniquement ; le multi-marque est
-venu ensuite. Il n'est affilié ni à Lovense ni à aucune autre marque.
+venu ensuite. Il n'est ni affilié à Lovense ou à une autre marque, ni approuvé ou
+sponsorisé par elles ; les noms de marques servent seulement à indiquer la
+compatibilité.
+
+> **TODO (mainteneur) :** le nom de l'app reprend celui de l'app officielle de
+> Lovense. Un renommage (p. ex. « Edge2 Remote », cohérent avec l'identifiant du
+> paquet) est envisagé mais pas encore décidé ; il toucherait le nom de l'app,
+> les fiches stores, les métadonnées F-Droid et le nom du dépôt.
 </details>
 
 ## 🛠 Pour les développeurs

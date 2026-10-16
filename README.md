@@ -129,13 +129,19 @@ A few toys need an extra pairing step, and the app tells you when: press the
 
 ## 🔗 Remote control by link
 
-1. Tap **Share**: you get a *Same Wi-Fi* link and an *Internet* link.
+1. Tap **Share**: you get a *Same Wi-Fi* link. The *Internet* link is optional:
+   it is only created after you accept that traffic goes through the
+   third-party relay localhost.run.
 2. Send the link to your partner, and tell them the **6-digit PIN** separately.
 3. When they open it, **you approve them** on your phone. Only then can they
    drive your toys, from any browser — no app needed on their side.
 4. Stop sharing whenever you want; it also expires on its own after 30 minutes.
+   When control stops (share stopped or expired, controller gone or kicked,
+   STOP tile), your toys are stopped too.
 
 ## 🔒 Security & privacy
+
+Read the full [privacy policy](PRIVACY.md).
 
 Knowing the link is never enough to control your toys:
 
@@ -151,6 +157,8 @@ Knowing the link is never enough to control your toys:
   never on mobile data / VPN interfaces.
 - **Pinned relay key** — nobody can impersonate the internet relay.
 - **No backups** of app data; deep links are validated and need your OK.
+- **Discreet** — screenshots blocked, hidden in Recents, neutral notification on
+  the lock screen.
 
 **Limits you should know:** same-Wi-Fi sharing is plain HTTP (use a Wi-Fi you
 trust). Internet sharing goes through [localhost.run](https://localhost.run), a
@@ -181,7 +189,13 @@ official apps send, and only to the channels that model is known to use.
 <summary><b>Why is it called "Lovense Remote" if it supports other brands?</b></summary>
 
 It started as a Lovense-only remote; multi-brand support came later. It is not
-affiliated with Lovense or any other brand.
+affiliated with, endorsed by or sponsored by Lovense or any other brand;
+brand names are only used to say which toys are compatible.
+
+> **TODO (maintainer):** the app name reuses the name of Lovense's official
+> app. A rename (e.g. "Edge2 Remote", matching the package id) is planned but
+> not decided yet; it would touch the app label, store listings, F-Droid
+> metadata and the repository name.
 </details>
 
 ## 🛠 For developers
