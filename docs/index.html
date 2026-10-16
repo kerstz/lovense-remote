@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lovense Remote – one free remote for 800+ toys</title>
+<meta name="description" content="Control 800+ Bluetooth toys from 120+ brands from your Android phone. No vendor app, no account, no cloud. Free and open source.">
+<meta property="og:title" content="Lovense Remote – one free remote for 800+ toys">
+<meta property="og:description" content="No vendor app, no account, no cloud. Open source, 100% AOSP.">
+<meta property="og:image" content="https://raw.githubusercontent.com/kerstz/lovense-remote/main/docs/social-preview.png">
+<link rel="icon" href="logo.svg" type="image/svg+xml">
+<style>
+@font-face{font-family:"Space Grotesk";src:url(assets/fonts/space_grotesk.ttf) format("truetype");font-weight:300 700;font-display:swap}
+@font-face{font-family:"JetBrains Mono";src:url(assets/fonts/jetbrains_mono.ttf) format("truetype");font-weight:100 800;font-display:swap}
+
+:root{
+  --bg:#0c0c12; --surface:#14141c; --raised:#1b1a26; --line:#272634;
+  --ink:#f6f4fb; --muted:#9c9aab; --violet:#a98bff; --pink:#ff8ba1; --live:#46e0a0;
+  --grad:linear-gradient(135deg,#8b6bff,#ff5c7a);
+  --on-grad:#0c0c12;
+  --font:"Space Grotesk",system-ui,sans-serif;
+  --data:"JetBrains Mono",ui-monospace,monospace;
+}
+@media (prefers-color-scheme:light){
+  :root:not([data-theme="dark"]){
+    --bg:#faf7fc; --surface:#fff; --raised:#f1ecf6; --line:#e2dbe9;
+    --ink:#17141f; --muted:#6a6578; --violet:#6d4ee0; --pink:#d93a5d; --live:#0e9b66;
+  }
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{transition:none!important;animation:none!important}}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 1.0625rem/1.6 var(--font);-webkit-font-smoothing:antialiased}
+a{color:inherit}
+:focus-visible{outline:2px solid var(--violet);outline-offset:3px;border-radius:6px}
+.wrap{max-width:68rem;margin:0 auto;padding:0 1rem}
+@media (min-width:48rem){.wrap{padding:0 2rem}}
+
+/* header */
+header{display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:1.25rem 0}
+.brand{display:flex;align-items:center;gap:.75rem;text-decoration:none;font-weight:600;font-size:1.125rem;letter-spacing:-.01em}
+.brand{white-space:nowrap}
+.brand svg{width:2.25rem;height:2.25rem;flex:none}
+nav .btn{white-space:nowrap}
+@media (max-width:30rem){.brand span{display:none}.btn{padding:0 .9rem}}
+nav{display:flex;gap:.5rem}
+.btn{display:inline-flex;align-items:center;gap:.5rem;min-height:2.75rem;padding:0 1.1rem;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--ink);font:500 .975rem var(--font);text-decoration:none;transition:background .15s,border-color .15s}
+.btn:hover{background:var(--raised);border-color:var(--violet)}
+.btn.primary{background:var(--grad);border-color:transparent;color:var(--on-grad);font-weight:600}
+.btn.primary:hover{filter:brightness(1.08)}
+
+/* hero */
+.hero{display:grid;gap:2.5rem;padding:2.5rem 0 4rem;align-items:center}
+@media (min-width:56rem){.hero{grid-template-columns:1.15fr .85fr;gap:4rem;padding:4rem 0 6rem}}
+h1{font-size:clamp(2.5rem,7vw,4.5rem);line-height:1.02;letter-spacing:-.035em;margin:0 0 1.25rem;font-weight:700;text-wrap:balance}
+.lede{max-width:34rem;color:var(--muted);margin:0 0 2rem;font-size:1.1875rem}
+.lede b{color:var(--ink);font-weight:500}
+
+/* search */
+.finder label{display:block;font-weight:500;margin-bottom:.5rem}
+.finder input{width:100%;min-height:3.25rem;padding:0 1.1rem;border-radius:14px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font:400 1.0625rem var(--font)}
+.finder input::placeholder{color:var(--muted)}
+.finder input:focus{border-color:var(--violet);outline:none;box-shadow:0 0 0 3px color-mix(in srgb,var(--violet) 30%,transparent)}
+#status{min-height:1.5rem;margin:.6rem 0 .25rem;color:var(--muted);font-size:.95rem}
+#results{list-style:none;margin:0;padding:0;border-top:1px solid var(--line)}
+#results li{display:flex;flex-wrap:wrap;align-items:baseline;gap:.25rem .75rem;padding:.7rem 0;border-bottom:1px solid var(--line)}
+#results .name{font:500 .975rem var(--data)}
+#results .brand-name{color:var(--muted);font-size:.9rem}
+#results .fns{margin-left:auto;color:var(--muted);font-size:.875rem}
+.tag{font-size:.8125rem;padding:.1rem .55rem;border-radius:999px;border:1px solid var(--line);color:var(--muted)}
+.tag.ok{color:var(--live);border-color:color-mix(in srgb,var(--live) 50%,transparent)}
+
+/* the pad: the one memorable thing */
+.padbox{justify-self:center;width:100%;max-width:25rem}
+#pad{position:relative;aspect-ratio:1;border-radius:2rem;background:
+  radial-gradient(circle at var(--px,50%) var(--py,50%),color-mix(in srgb,var(--violet) 34%,transparent),transparent 46%),
+  var(--surface);
+  border:1px solid var(--line);touch-action:none;cursor:crosshair;overflow:hidden;user-select:none}
+#pad::before,#pad::after{content:"";position:absolute;background:var(--line);transition:background .2s}
+#pad::before{left:var(--px,50%);top:0;bottom:0;width:2px;margin-left:-1px;background:var(--violet)}
+#pad::after{top:var(--py,50%);left:0;right:0;height:2px;margin-top:-1px;background:var(--pink)}
+#dot{position:absolute;left:var(--px,50%);top:var(--py,50%);width:2.25rem;height:2.25rem;margin:-1.125rem 0 0 -1.125rem;border-radius:50%;background:var(--ink);box-shadow:0 0 0 .6rem color-mix(in srgb,var(--ink) 14%,transparent),0 .5rem 2rem rgba(139,107,255,.55)}
+.readout{display:flex;justify-content:space-between;margin-top:1rem;font-size:.95rem;color:var(--muted)}
+.readout span b{font:500 1rem var(--data);color:var(--ink);margin-left:.4rem}
+.readout .m1 b{color:var(--violet)}.readout .m2 b{color:var(--pink)}
+.padnote{margin:.6rem 0 0;color:var(--muted);font-size:.9rem}
+
+/* sections */
+section{padding:4rem 0;border-top:1px solid var(--line)}
+h2{font-size:clamp(1.75rem,4vw,2.5rem);line-height:1.1;letter-spacing:-.025em;margin:0 0 1rem;font-weight:700;text-wrap:balance}
+.two{display:grid;gap:2.5rem}
+@media (min-width:56rem){.two{grid-template-columns:1fr 1fr;gap:4rem}}
+.two p{color:var(--muted);max-width:34rem;margin:0 0 1rem}
+dl.caps{margin:0;display:grid;grid-template-columns:auto 1fr;gap:0;border-top:1px solid var(--line)}
+dl.caps dt,dl.caps dd{margin:0;padding:.8rem 0;border-bottom:1px solid var(--line)}
+dl.caps dt{font:500 1rem var(--data);color:var(--violet);padding-right:1.5rem;text-align:right;min-width:4.5rem}
+dl.caps dd b{font-weight:600}
+dl.caps dd span{color:var(--muted)}
+.shots{display:flex;gap:1.25rem;overflow-x:auto;padding:.5rem 0 1.5rem;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch}
+.shots img{flex:0 0 auto;width:min(15.5rem,62vw);height:auto;border-radius:1.75rem;border:1px solid var(--line);scroll-snap-align:start}
+ul.plain{list-style:none;margin:0;padding:0;border-top:1px solid var(--line)}
+ul.plain li{padding:1rem 0;border-bottom:1px solid var(--line)}
+ul.plain b{font-weight:600}
+ul.plain span{color:var(--muted)}
+.get{text-align:left}
+.get .actions{display:flex;flex-wrap:wrap;gap:.75rem;margin-top:1.5rem}
+footer{border-top:1px solid var(--line);padding:2rem 0 3rem;color:var(--muted);font-size:.9rem}
+footer p{max-width:42rem;margin:.25rem 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <a class="brand" href="#top" aria-label="Lovense Remote">
+      <svg viewBox="0 0 108 108" aria-hidden="true"><defs><linearGradient id="lg" x1="6" y1="6" x2="102" y2="102" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#8B6BFF"/><stop offset="1" stop-color="#FF5C7A"/></linearGradient><clipPath id="sq"><rect width="108" height="108" rx="26"/></clipPath></defs><g clip-path="url(#sq)"><rect width="108" height="108" fill="url(#lg)"/><path fill="#0C0C12" d="M40,26H68A14,14 0 0 1 82,40V68A14,14 0 0 1 68,82H40A14,14 0 0 1 26,68V40A14,14 0 0 1 40,26Z"/><circle cx="63" cy="50" r="15" fill="#fff" opacity=".25"/><line x1="63" y1="33" x2="63" y2="75" stroke="#A98BFF" stroke-width="2.5" stroke-linecap="round"/><line x1="33" y1="50" x2="75" y2="50" stroke="#FF8BA1" stroke-width="2.5" stroke-linecap="round"/><circle cx="63" cy="50" r="8" fill="#fff"/></g></svg>
+      <span>Lovense Remote</span>
+    </a>
+    <nav aria-label="Links">
+      <a class="btn" href="https://github.com/kerstz/lovense-remote">★ Star on GitHub</a>
+      <a class="btn primary" href="https://github.com/kerstz/lovense-remote/releases/latest">Download APK</a>
+    </nav>
+  </header>
+
+  <main id="top">
+    <div class="hero">
+      <div>
+        <h1>One remote for 800+ toys.</h1>
+        <p class="lede">Stop installing a different app, and creating a different account, for every brand. This one talks Bluetooth to <b>Lovense, Satisfyer, We-Vibe, Svakom, Lelo, Kiiroo, JoyHub</b> and 120 more. <b>No cloud, no sign-up</b>, free and open source.</p>
+
+        <div class="finder">
+          <label for="q">Is my toy supported?</label>
+          <input id="q" type="search" autocomplete="off" placeholder="Brand or model, e.g. Hush" aria-controls="results">
+          <div id="status" role="status" aria-live="polite"></div>
+          <ul id="results"></ul>
+        </div>
+      </div>
+
+      <div class="padbox">
+        <div id="pad" tabindex="0" role="application" aria-label="Demo of the XY pad. Move the pointer or use the arrow keys.">
+          <div id="dot"></div>
+        </div>
+        <div class="readout" aria-hidden="true">
+          <span class="m1">Motor 1<b id="v1">50%</b></span>
+          <span class="m2">Motor 2<b id="v2">50%</b></span>
+        </div>
+        <p class="padnote">This is the app's XY pad: one thumb drives both motors of a two-motor toy.</p>
+      </div>
+    </div>
+  </main>
+
+  <section aria-labelledby="adapts">
+    <div class="two">
+      <div>
+        <h2 id="adapts">The screen adapts to your toy</h2>
+        <p>You only see what your toy can do. A vibrator gets a slider, a rotating toy gets a direction button, a heated toy gets a switch. Connect up to five toys, from different brands, and drive them one by one or all together.</p>
+        <p>Lovense is tested on real hardware. Every other brand is marked <b>experimental</b>: the commands come from the open Buttplug community database and haven't been tried on that model by this project. <a href="https://github.com/kerstz/lovense-remote/issues/new?template=toy_report.yml">Tell us if yours works.</a></p>
+      </div>
+      <dl class="caps">
+        <dt>743</dt><dd><b>Vibration</b> <span>slider per motor, XY pad for two motors</span></dd>
+        <dt>130</dt><dd><b>Thrusting</b> <span>speed slider</span></dd>
+        <dt>59</dt><dd><b>Rotation</b> <span>slider and direction flip</span></dd>
+        <dt>51</dt><dd><b>Suction</b> <span>level slider</span></dd>
+        <dt>21</dt><dd><b>Heating</b> <span>switch or temperature in °C</span></dd>
+        <dt>19</dt><dd><b>Strokers</b> <span>speed slider, the app generates the strokes</span></dd>
+      </dl>
+    </div>
+  </section>
+
+  <section aria-labelledby="see">
+    <h2 id="see">See it</h2>
+    <div class="shots">
+      <img src="assets/shots/01-connection.png" alt="Scan screen listing nearby toys with their brand and model" loading="lazy" width="1080" height="2424">
+      <img src="assets/shots/02-main.png" alt="Main screen with sliders, XY pad, presets and patterns" loading="lazy" width="1080" height="2424">
+      <img src="assets/shots/03-sharing.png" alt="Sharing screen with link, PIN and QR code" loading="lazy" width="1080" height="2424">
+    </div>
+  </section>
+
+  <section aria-labelledby="private">
+    <div class="two">
+      <div>
+        <h2 id="private">Private by design</h2>
+        <p>Everything stays on your phone. Sharing with a partner is optional, and knowing the link is never enough to take control.</p>
+      </div>
+      <ul class="plain">
+        <li><b>Secret link, new every time.</b> <span>128-bit random id; old links die at once.</span></li>
+        <li><b>6-digit PIN, never in the URL.</b> <span>Five wrong codes stop the share.</span></li>
+        <li><b>You approve each person.</b> <span>Accept or kick controllers one by one.</span></li>
+        <li><b>No Google services, no tracking.</b> <span>100% AOSP: works on GrapheneOS and LineageOS.</span></li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="get" aria-labelledby="get">
+    <h2 id="get">Free, forever, GPLv3</h2>
+    <p style="color:var(--muted);max-width:34rem;margin:0">Android 8.0 or newer. Built in the open, reviewed by anyone. If it saves you an app or two, a star helps other people find it.</p>
+    <div class="actions">
+      <a class="btn primary" href="https://github.com/kerstz/lovense-remote/releases/latest">Download the APK</a>
+      <a class="btn" href="https://github.com/kerstz/lovense-remote">★ Star on GitHub</a>
+      <a class="btn" href="https://github.com/kerstz/lovense-remote/blob/main/CONTRIBUTING.md">Contribute</a>
+    </div>
+  </section>
+
+  <footer>
+    <p>Not affiliated with, or endorsed by, Lovense or any other brand listed here. Device data and protocols come from the <a href="https://github.com/buttplugio/buttplug">Buttplug</a> project (BSD-3-Clause).</p>
+    <p>Largely written with an AI coding assistant, then reviewed and tested by hand.</p>
+  </footer>
+</div>
+
+<script>
+(() => {
+  /* XY pad demo */
+  const pad = document.getElementById('pad'), v1 = document.getElementById('v1'), v2 = document.getElementById('v2');
+  let x = .5, y = .5;
+  const draw = () => {
+    pad.style.setProperty('--px', (x * 100) + '%');
+    pad.style.setProperty('--py', (y * 100) + '%');
+    v1.textContent = Math.round(x * 100) + '%';
+    v2.textContent = Math.round((1 - y) * 100) + '%';
+  };
+  const move = e => {
+    const r = pad.getBoundingClientRect();
+    x = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
+    y = Math.min(1, Math.max(0, (e.clientY - r.top) / r.height));
+    draw();
+  };
+  pad.addEventListener('pointermove', move);
+  pad.addEventListener('pointerdown', e => { pad.setPointerCapture(e.pointerId); move(e); });
+  pad.addEventListener('keydown', e => {
+    const s = e.shiftKey ? .1 : .03;
+    const k = { ArrowLeft: [-s, 0], ArrowRight: [s, 0], ArrowUp: [0, -s], ArrowDown: [0, s] }[e.key];
+    if (!k) return;
+    e.preventDefault();
+    x = Math.min(1, Math.max(0, x + k[0])); y = Math.min(1, Math.max(0, y + k[1])); draw();
+  });
+  draw();
+
+  /* toy finder */
+  const q = document.getElementById('q'), out = document.getElementById('results'), status = document.getElementById('status');
+  const FN = { vibration: 'vibration', rotation: 'rotation', thrust: 'thrusting', suction: 'suction', heat: 'heating', light: 'light', pump: 'lube pump', stroker: 'stroker' };
+  const norm = s => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9+ ]/g, ' ').replace(/\s+/g, ' ').trim();
+  let toys = [], total = 0, brandCount = 0;
+
+  const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
+
+  const render = () => {
+    const term = norm(q.value);
+    out.replaceChildren();
+    if (!term) { status.textContent = total ? `${total} models from ${brandCount} brand families. Start typing to check yours.` : ''; return; }
+    const words = term.split(' ');
+    const hits = toys.filter(t => words.every(w => t.key.includes(w)));
+    if (!hits.length) {
+      status.replaceChildren(document.createTextNode('No match. Check the name your toy shows in a Bluetooth scanner app, then '));
+      const a = el('a', null, 'send us a toy report');
+      a.href = 'https://github.com/kerstz/lovense-remote/issues/new?template=toy_report.yml';
+      status.append(a, document.createTextNode('.'));
+      return;
+    }
+    status.textContent = hits.length > 10 ? `${hits.length} matches, showing 10. Add a word to narrow down.` : `${hits.length} match${hits.length > 1 ? 'es' : ''}.`;
+    for (const t of hits.slice(0, 10)) {
+      const li = el('li');
+      li.append(el('span', 'name', t.name), el('span', 'brand-name', t.brand),
+        el('span', 'tag' + (t.tested ? ' ok' : ''), t.tested ? 'tested' : 'experimental'));
+      if (t.fns.length) li.append(el('span', 'fns', t.fns.map(f => FN[f] || f).join(', ')));
+      out.append(li);
+    }
+  };
+
+  fetch('toys.json').then(r => r.json()).then(d => {
+    total = d.models; brandCount = d.brands.length;
+    for (const b of d.brands) for (const [name, fns] of b.toys) toys.push({ name, fns, brand: b.brand, tested: b.tested, key: norm(b.brand + ' ' + name) });
+    render();
+  }).catch(() => { status.textContent = 'The list could not be loaded. See the full list on GitHub.'; });
+  q.addEventListener('input', render);
+})();
+</script>
+</body>
+</html>
