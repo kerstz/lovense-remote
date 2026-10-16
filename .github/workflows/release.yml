@@ -44,6 +44,6 @@ jobs:
         run: ./gradlew :app:assembleRelease --no-daemon
 
       - name: Attach APK to release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: app/build/outputs/apk/release/*.apk
