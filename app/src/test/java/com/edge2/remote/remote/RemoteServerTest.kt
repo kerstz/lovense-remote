@@ -32,6 +32,7 @@ class RemoteServerTest {
     private val port = 18787 + (System.nanoTime() % 1000).toInt()
     private val commands = CopyOnWriteArrayList<RemoteCommand>()
     private val lockouts = AtomicInteger()
+    private val gone = AtomicInteger()
     private lateinit var server: RemoteServer
     private val client = HttpClient(CIO) { install(WebSockets) }
 
@@ -43,6 +44,7 @@ class RemoteServerTest {
             loadFont = { ByteArray(4) },
             onCommand = { _, c -> commands += c },
             onLockout = { lockouts.incrementAndGet() },
+            onControllersGone = { gone.incrementAndGet() },
             port = port,
         )
         assertTrue(server.start(lanIp = null))
@@ -74,7 +76,7 @@ class RemoteServerTest {
     }
 
     @Test fun secondServerOnSamePortFailsGracefully() {
-        val other = RemoteServer({ html }, { ByteArray(0) }, { _, _ -> }, {}, port)
+        val other = RemoteServer({ html }, { ByteArray(0) }, { _, _ -> }, {}, port = port)
         assertFalse(other.start(lanIp = null))
     }
 
@@ -145,5 +147,62 @@ class RemoteServerTest {
             send(Frame.Text("AUTH:$oldPin"))
             assertNull(next(1_500))
         }
+    }
+
+    @Test fun kickedControllerCannotResumeWithItsToken() = runBlocking {
+        var token: String? = null
+        client.webSocket(ws) {
+            send(Frame.Text("AUTH:${server.pin}"))
+            assertTrue(next()!!.startsWith("STATE:{\"approved\":false"))
+            server.approve(server.controllers.value.single().id)
+            token = next()?.removePrefix("TOKEN:")
+            assertNotNull(token)
+            assertTrue(next()!!.startsWith("STATE:{\"approved\":true"))
+            server.kick(server.controllers.value.single().id)
+            withTimeout(3_000) { while (server.controllers.value.isNotEmpty()) delay(20) }
+        }
+        client.webSocket(ws) {
+            send(Frame.Text("AUTH:${server.pin}:$token"))
+            assertTrue(next()!!.startsWith("STATE:{\"approved\":false"))
+            send(Frame.Text("B:10"))
+            delay(200)
+            assertTrue("kicked controller must not drive", commands.isEmpty())
+        }
+    }
+
+    @Test fun controllersGoneFiresOnlyWhenLastApprovedControllerLeaves() = runBlocking {
+        // A pending controller leaving does not fire.
+        client.webSocket(ws) {
+            send(Frame.Text("AUTH:${server.pin}"))
+            assertTrue(next()!!.startsWith("STATE:"))
+        }
+        withTimeout(3_000) { while (server.controllers.value.isNotEmpty()) delay(20) }
+        delay(100)
+        assertEquals(0, gone.get())
+        // An approved one disconnecting does.
+        client.webSocket(ws) {
+            send(Frame.Text("AUTH:${server.pin}"))
+            assertTrue(next()!!.startsWith("STATE:"))
+            server.approve(server.controllers.value.single().id)
+            assertTrue(next()!!.startsWith("TOKEN:"))
+            assertTrue(next()!!.startsWith("STATE:{\"approved\":true"))
+        }
+        withTimeout(3_000) { while (gone.get() == 0) delay(20) }
+        assertEquals(1, gone.get())
+    }
+
+    @Test fun controllersGoneFiresOnKickOfApprovedController() = runBlocking {
+        client.webSocket(ws) {
+            send(Frame.Text("AUTH:${server.pin}"))
+            assertTrue(next()!!.startsWith("STATE:"))
+            val id = server.controllers.value.single().id
+            server.approve(id)
+            assertTrue(next()!!.startsWith("TOKEN:"))
+            assertTrue(next()!!.startsWith("STATE:{\"approved\":true"))
+            server.kick(id)
+            withTimeout(3_000) { while (gone.get() == 0) delay(20) }
+        }
+        delay(200)
+        assertEquals(1, gone.get()) // not fired a second time by the socket closing
     }
 }

@@ -76,6 +76,8 @@ class RemoteEngine private constructor(context: Context) {
         appContext.assets,
         onCommand = { _, cmd -> applyRemote(cmd) },
         onLockout = { scope.launch { stopSharing(); _shareError.value = ShareError.LOCKED } },
+        // Safety: the last approved controller is gone → stop every toy.
+        onControllersGone = { stopAll() },
     )
     private val tunnel = SshTunnel(appContext, scope)
 
@@ -284,6 +286,7 @@ class RemoteEngine private constructor(context: Context) {
         expiryJob = null
         tunnel.stop()
         server.stop()
+        stopAll() // an approved controller must not leave a toy running
         _sharing.value = false
         _pin.value = null
         _shareUrl.value = null

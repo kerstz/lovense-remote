@@ -48,7 +48,8 @@ data class ControllerInfo(val id: Int, val approved: Boolean)
  *  3. **Host approval PER controller**: an authenticated controller stays
  *     "pending" (commands ignored) until the host approves THAT controller.
  *     Once approved, a resume token lets it reconnect (network blip) without
- *     asking again.
+ *     asking again. The token is bound to the session it was issued for:
+ *     kicking that controller ([kick]) revokes it, so it must be re-approved.
  *  4. **Anti-CSWSH**: `Origin` must point to our own host.
  *  5. **Anti-DoS**: frames ≤ 256 B, rate limiting, max 3 sockets,
  *     authentication within 10 s, pending approval ≤ 2 min.
@@ -64,6 +65,11 @@ class RemoteServer(
     private val loadFont: (String) -> ByteArray,
     private val onCommand: (controllerId: Int, RemoteCommand) -> Unit,
     private val onLockout: () -> Unit,
+    /**
+     * Called when an APPROVED controller is gone (socket closed or kicked) and no
+     * other approved controller remains — the host should stop the toys (safety).
+     */
+    private val onControllersGone: () -> Unit = {},
     val port: Int = 8787,
 ) {
     /** Android constructor: page and fonts served from the APK assets. */
@@ -71,11 +77,13 @@ class RemoteServer(
         assets: AssetManager,
         onCommand: (controllerId: Int, RemoteCommand) -> Unit,
         onLockout: () -> Unit,
+        onControllersGone: () -> Unit = {},
     ) : this(
         loadHtml = { assets.open("controller.html").bufferedReader().use { it.readText() } },
         loadFont = { name -> assets.open("fonts/$name").use { it.readBytes() } },
         onCommand = onCommand,
         onLockout = onLockout,
+        onControllersGone = onControllersGone,
     )
 
     @Volatile
@@ -93,6 +101,8 @@ class RemoteServer(
 
     private class Session(val id: Int, val ws: DefaultWebSocketServerSession) {
         val approved = AtomicBoolean(false)
+        /** Resume token tied to this controller (revoked when it is kicked). */
+        @Volatile var token: String? = null
     }
 
     private val sessions = ConcurrentHashMap<Int, Session>()
@@ -206,11 +216,14 @@ class RemoteServer(
                 close(policy)
                 return
             }
-            val resumed = parts.getOrNull(1)?.let { tok -> resumeTokens.any { ShareSecurity.constantTimeEquals(it, tok) } } == true
+            val resumeToken = parts.getOrNull(1)?.let { tok -> resumeTokens.firstOrNull { ShareSecurity.constantTimeEquals(it, tok) } }
 
             // 2. Registration: pending approval (unless resuming an approved controller).
             val s = Session(nextId.getAndIncrement(), this)
-            if (resumed) s.approved.set(true)
+            if (resumeToken != null) {
+                s.token = resumeToken
+                s.approved.set(true)
+            }
             sessions[s.id] = s
             publish()
             outgoing.send(Frame.Text("STATE:" + stateFor(s)))
@@ -234,8 +247,9 @@ class RemoteServer(
                 }
             } finally {
                 approvalTimeout.cancel()
-                sessions.remove(s.id)
+                val removed = sessions.remove(s.id)
                 publish()
+                if (removed != null && s.approved.get()) notifyIfNoApproved()
             }
         } finally {
             openSockets.decrementAndGet()
@@ -247,6 +261,7 @@ class RemoteServer(
         val s = sessions[id] ?: return
         if (!s.approved.compareAndSet(false, true)) return
         val tok = ShareSecurity.token(16)
+        s.token = tok
         resumeTokens += tok
         s.ws.launch {
             runCatching {
@@ -260,11 +275,17 @@ class RemoteServer(
     /** The host refuses / kicks controller [id] (the others stay connected). */
     fun kick(id: Int) {
         val s = sessions.remove(id) ?: return
+        s.token?.let { resumeTokens.remove(it) }
         s.ws.launch {
             runCatching { s.ws.outgoing.send(Frame.Text("DENIED")) }
             s.ws.close(CloseReason(CloseReason.Codes.VIOLATED_POLICY, ""))
         }
         publish()
+        if (s.approved.get()) notifyIfNoApproved()
+    }
+
+    private fun notifyIfNoApproved() {
+        if (sessions.values.none { it.approved.get() }) onControllersGone()
     }
 
     /** Pushes the current state (toy list…) to every controller. */
