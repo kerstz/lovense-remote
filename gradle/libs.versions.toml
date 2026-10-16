@@ -10,7 +10,7 @@ serializationJson = "1.10.0"
 ktor = "3.6.0"
 zxing = "3.5.4"
 sshj = "0.41.2"
-slf4jSimple = "2.0.17"
+slf4jSimple = "2.0.20"
 bouncycastle = "1.86"
 junit = "4.13.2"
 
