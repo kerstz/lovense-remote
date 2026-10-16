@@ -1,0 +1,4 @@
+- Actionable Bluetooth/permission scan errors (one-tap fix).
+- Smaller, faster release build (R8).
+- UI stability fixes.
+- Dependency updates (Kotlin 2.4, Gradle 9.8).

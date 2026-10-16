@@ -4,6 +4,8 @@
 
 # Lovense Remote
 
+> Unofficial, community project. Not affiliated with or endorsed by Lovense. LOVENSE is a trademark of its owner.
+
 ### One free remote for **800+ toys** from **120+ brands**
 
 **Lovense, Satisfyer, We-Vibe, Svakom, Lelo, Kiiroo, Magic Motion, JoyHub, Hismith, Vorze…**

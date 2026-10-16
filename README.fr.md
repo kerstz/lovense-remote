@@ -4,6 +4,8 @@
 
 # Lovense Remote
 
+> Projet communautaire non officiel. Non affilié à Lovense, non approuvé par Lovense. LOVENSE est une marque de son propriétaire.
+
 ### Une seule télécommande gratuite pour **800+ toys** de **120+ marques**
 
 **Lovense, Satisfyer, We-Vibe, Svakom, Lelo, Kiiroo, Magic Motion, JoyHub, Hismith, Vorze…**
