@@ -34,6 +34,9 @@
     <!-- Foreground service: keeps the toy link alive in the background. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
+    <!-- Normal permission: satisfies the connectedDevice FGS prerequisite on
+         API 34+ even when BLUETOOTH_CONNECT was denied (sharing only). -->
+    <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
     <!-- 100% AOSP: no Google Play Services dependency (bundled fonts). -->
 
     <application
