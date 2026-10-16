@@ -4,6 +4,21 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) · [SemVer](htt
 
 ## [Unreleased]
 
+### Security
+- A refused or kicked controller can no longer reconnect auto-approved with its resume token.
+- Toys stop when remote control ends: last approved controller gone or kicked, sharing stopped, expired or locked out. The STOP tile also stops sharing.
+- A failed BLE write (including STOP) is retried with back-off; the keepalive re-sends the desired state and never an old non-zero level.
+
+### Privacy
+- Internet sharing through localhost.run is now opt-in, with an explicit consent dialog.
+- Lock-screen notification shows a neutral text; screenshots and Recents thumbnails are blocked (FLAG_SECURE).
+- New [privacy policy](PRIVACY.md), linked from the READMEs, store descriptions and website.
+
+### Changed
+- Release workflow: fails without signing secrets, runs tests and lint, publishes `SHA256SUMS` and a build-provenance attestation; actions pinned by SHA.
+- `CHANGE_NETWORK_STATE` declared (foreground-service prerequisite on API 34+).
+- F-Droid metadata updated to 0.2.1.
+
 ## [0.2.1] - 2026-10-16
 
 ### Added
