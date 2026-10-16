@@ -55,6 +55,10 @@
     <string name="share_internet_connecting">Internet — conectando al relé…</string>
     <string name="share_internet_preparing">Preparando enlace de internet… (unos segundos)</string>
     <string name="share_internet_hint">Abre este enlace desde CUALQUIER LUGAR (datos/otra red):</string>
+    <string name="share_internet_button">Compartir por Internet</string>
+    <string name="share_internet_consent_title">¿Compartir por Internet?</string>
+    <string name="share_internet_consent_body">El enlace pasará por localhost.run, un relé de terceros. El relé termina el TLS, así que puede ver el PIN, los nombres de tus juguetes, los comandos enviados y la dirección IP del controlador. Continúa solo si confías en él. Compartir por Wi-Fi no lo usa.</string>
+    <string name="share_internet_agree">Acepto</string>
     <string name="share_lan_title">Misma WiFi (LAN)</string>
     <string name="share_lan_hint">Solo misma Wi-Fi — sin cifrar, úsalo en una red de confianza:</string>
     <string name="share_none">No hay enlace de uso compartido. Revisa el permiso de red de la app.</string>

@@ -237,6 +237,7 @@ fun RemoteScreen(vm: RemoteViewModel, onAddToy: () -> Unit, onSettings: () -> Un
             lanUrl = shareUrl, tunnelUrl = tunnelUrl, tunnelPreparing = tunnelPreparing,
             hostKeyMismatch = hostKeyMismatch, shareError = shareError, pin = pin,
             onTrustKey = vm::trustNewRelayKey,
+            onInternet = vm::startInternetTunnel,
             onStop = { vm.stopSharing(); shareOpen = false },
             onClose = { shareOpen = false },
         )
@@ -683,10 +684,24 @@ private fun ShareDialog(
     shareError: ShareError,
     pin: String?,
     onTrustKey: () -> Unit,
+    onInternet: () -> Unit,
     onStop: () -> Unit,
     onClose: () -> Unit,
 ) {
     val c = Edge2.colors
+    // Consent is per share: the dialog is recreated for each new share.
+    var consentOpen by remember { mutableStateOf(false) }
+    if (consentOpen) {
+        AlertDialog(
+            onDismissRequest = { consentOpen = false },
+            confirmButton = {
+                TextButton(onClick = { consentOpen = false; onInternet() }) { Text(stringResource(R.string.share_internet_agree)) }
+            },
+            dismissButton = { TextButton(onClick = { consentOpen = false }) { Text(stringResource(R.string.action_cancel)) } },
+            title = { Text(stringResource(R.string.share_internet_consent_title)) },
+            text = { Text(stringResource(R.string.share_internet_consent_body)) },
+        )
+    }
     AlertDialog(
         onDismissRequest = onClose,
         confirmButton = { TextButton(onClick = onStop) { Text(stringResource(R.string.share_stop)) } },
@@ -716,6 +731,7 @@ private fun ShareDialog(
                                 stringResource(R.string.share_internet_hint), tunnelUrl,
                             )
                             tunnelPreparing -> Text(stringResource(R.string.share_internet_preparing), color = c.muted)
+                            else -> GhostChip(stringResource(R.string.share_internet_button)) { consentOpen = true }
                         }
                         // LAN (Wi-Fi/Ethernet) — snappier, but unencrypted HTTP.
                         if (lanUrl != null) {

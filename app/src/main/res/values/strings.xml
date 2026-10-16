@@ -56,6 +56,10 @@
     <string name="share_internet_connecting">Internet — connecting to relay…</string>
     <string name="share_internet_preparing">Preparing internet link… (a few seconds)</string>
     <string name="share_internet_hint">Open this link from ANYWHERE (mobile data/other network):</string>
+    <string name="share_internet_button">Share over the Internet</string>
+    <string name="share_internet_consent_title">Share over the Internet?</string>
+    <string name="share_internet_consent_body">The link will go through localhost.run, a third-party relay. The relay terminates TLS, so it can see the PIN, your toy names, the commands sent and the controller\'s IP address. Only continue if you trust it. Wi-Fi sharing does not use it.</string>
+    <string name="share_internet_agree">I agree</string>
     <string name="share_lan_title">Same WiFi (LAN)</string>
     <string name="share_lan_hint">Same Wi-Fi only — not encrypted, use on a trusted network:</string>
     <string name="share_none">No share link available. Check the app\'s network permission.</string>

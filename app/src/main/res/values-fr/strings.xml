@@ -56,6 +56,10 @@
     <string name="share_internet_connecting">Internet — connexion au relais…</string>
     <string name="share_internet_preparing">Lien internet en préparation… (quelques secondes)</string>
     <string name="share_internet_hint">Ouvre ce lien de N\'IMPORTE OÙ (4G/autre réseau) :</string>
+    <string name="share_internet_button">Partager via Internet</string>
+    <string name="share_internet_consent_title">Partager via Internet ?</string>
+    <string name="share_internet_consent_body">Le lien passera par localhost.run, un relais tiers. Le relais termine le TLS : il peut voir le code PIN, les noms de tes jouets, les commandes envoyées et l\'adresse IP du contrôleur. Continue seulement si tu lui fais confiance. Le partage Wi-Fi ne l\'utilise pas.</string>
+    <string name="share_internet_agree">J\'accepte</string>
     <string name="share_lan_title">Même WiFi (LAN)</string>
     <string name="share_lan_hint">Même Wi-Fi uniquement — non chiffré, à réserver à un réseau de confiance :</string>
     <string name="share_none">Aucun lien de partage disponible. Vérifie l\'autorisation réseau de l\'app.</string>

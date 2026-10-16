@@ -259,14 +259,19 @@ class RemoteEngine private constructor(context: Context) {
         _pin.value = server.pin
         _sharing.value = true
         _shareUrl.value = ip?.let { "http://$it:${server.port}/s/${server.sessionId}" }
-        // Internet tunnel (SSH/localhost.run) → works over 4G. URL ready in a few seconds.
-        if (!tunnel.hostKeyMismatch.value) {
-            _tunnelPreparing.value = true
-            tunnel.start(server.port)
-        }
         // Auto-expiry: cuts access after 30 min.
         expiryJob?.cancel()
         expiryJob = scope.launch { delay(30 * 60_000L); stopSharing() }
+    }
+
+    /**
+     * Opt-in Internet link (SSH/localhost.run) → works over 4G. The third-party relay
+     * terminates TLS, so the UI must obtain the host's consent first. URL ready in a few seconds.
+     */
+    fun startInternetTunnel() {
+        if (!_sharing.value || tunnel.hostKeyMismatch.value) return
+        _tunnelPreparing.value = true
+        tunnel.start(server.port)
     }
 
     /** The host approves controller [id]. */

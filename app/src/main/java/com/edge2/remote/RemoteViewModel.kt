@@ -54,6 +54,7 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
 
     // Actions — sharing
     fun startSharing() = engine.startSharing()
+    fun startInternetTunnel() = engine.startInternetTunnel()
     fun stopSharing() = engine.stopSharing()
     fun approveController(id: Int) = engine.approveController(id)
     fun refuseController(id: Int) = engine.refuseController(id)
