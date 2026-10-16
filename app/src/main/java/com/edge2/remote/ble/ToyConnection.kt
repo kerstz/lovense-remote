@@ -102,12 +102,13 @@ class ToyConnection(
     // Write queue: desired level per actuator (signed for rotation).
     private val desired = HashMap<Int, Int>()
     private val lastSent = HashMap<Int, Int>()
+    /** Actuators whose current desired level must be re-sent even if unchanged (keepalive); guarded by `desired`. */
+    private val refresh = HashSet<Int>()
     /** Rotation direction per actuator (+1 / −1). */
     private val direction = HashMap<Int, Int>()
     /** Stroke speed (0..1) per STROKE actuator. */
     private val strokeSpeed = HashMap<Int, Float>()
     private val writeSignal = Channel<Unit>(Channel.CONFLATED)
-    @Volatile private var lastWrite: Write? = null
     @Volatile private var lastWriteAt = 0L
 
     private fun str(resId: Int): String = Settings.wrapLocale(appContext).getString(resId)
@@ -210,7 +211,7 @@ class ToyConnection(
             if (!started) { opDeferred = null; return false }
             val ok = withTimeoutOrNull(1_000) { ack.await() } != null
             opDeferred = null
-            if (ok) { lastWrite = w; lastWriteAt = System.currentTimeMillis() }
+            if (ok) lastWriteAt = System.currentTimeMillis()
             ok
         }
 
@@ -368,7 +369,7 @@ class ToyConnection(
             handler = h
             io.hint(null)
             reconnectAttempts = 0
-            synchronized(desired) { desired.clear(); lastSent.clear(); strokeSpeed.clear() }
+            synchronized(desired) { desired.clear(); lastSent.clear(); refresh.clear(); strokeSpeed.clear() }
             _status.update { it.copy(toy = toy, link = LinkState.Connected, levels = List(toy.actuators.size) { 0 }, hint = null) }
             h.attach(io, this)
             launch { writerLoop(h) }
@@ -441,23 +442,24 @@ class ToyConnection(
 
     private suspend fun writerLoop(h: ProtocolHandler) {
         for (signal in writeSignal) {
-            while (true) {
-                val changes = synchronized(desired) {
-                    desired.filter { (i, v) -> lastSent[i] != v }.toList()
-                }
-                if (changes.isEmpty()) break
-                var ok = true
-                for ((i, v) in changes) {
-                    val a = toy.actuators.getOrNull(i) ?: continue
-                    for (w in dispatch(h, a, v)) if (!io.write(w)) { ok = false; break }
-                    if (!ok) break
-                    synchronized(desired) { lastSent[i] = v }
+            // A failed write (GATT timeout, congestion) is retried with back-off against the CURRENT
+            // desired state, so a STOP is never lost; we give up only when the link is gone.
+            WriteDrain.drain(
+                lock = desired,
+                desired = desired,
+                lastSent = lastSent,
+                refresh = refresh,
+                send = { i, v ->
+                    val a = toy.actuators.getOrNull(i)
+                    a == null || dispatch(h, a, v).all { io.write(it) }
+                },
+                canRetry = { !closed && gatt != null && handler === h },
+                onSent = { i, v ->
                     // A pump press is momentary: forget it so the next press is sent again.
-                    if (a.kind == ActuatorKind.SPRAY && v != 0) synchronized(desired) { desired[i] = 0; lastSent[i] = 0 }
-                }
-                publishLevels()
-                if (!ok) break // the next signal will retry
-            }
+                    if (toy.actuators.getOrNull(i)?.kind == ActuatorKind.SPRAY && v != 0) { desired[i] = 0; lastSent[i] = 0 }
+                },
+                publish = ::publishLevels,
+            )
         }
     }
 
@@ -466,12 +468,19 @@ class ToyConnection(
         _status.update { it.copy(levels = levels) }
     }
 
-    /** Hardware that stops without traffic: repeat the last packet. */
+    /**
+     * Hardware that stops without traffic: when idle for [ms], ask the writer to re-send the DESIRED
+     * non-zero levels (never an old packet; nothing at all when everything is off). Going through
+     * the writer serializes it with STOP writes, so a refresh can't land after a stop.
+     */
     private suspend fun keepaliveLoop(ms: Long) {
         while (scope.isActive) {
             delay(ms)
-            val w = lastWrite ?: continue
-            if (System.currentTimeMillis() - lastWriteAt >= ms) io.write(w)
+            if (System.currentTimeMillis() - lastWriteAt < ms) continue
+            val due = synchronized(desired) {
+                WriteDrain.keepaliveRefresh(desired).also { refresh.addAll(it) }
+            }
+            if (due.isNotEmpty()) writeSignal.trySend(Unit)
         }
     }
 
