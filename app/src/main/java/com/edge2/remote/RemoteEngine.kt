@@ -1,6 +1,7 @@
 package com.edge2.remote
 
 import android.content.Context
+import com.edge2.remote.R
 import com.edge2.remote.ble.DiscoveredToy
 import com.edge2.remote.ble.ToyManager
 import com.edge2.remote.ble.ToyStatus
@@ -9,6 +10,7 @@ import com.edge2.remote.pattern.Pattern
 import com.edge2.remote.pattern.PatternPlayer
 import com.edge2.remote.pattern.PatternSink
 import com.edge2.remote.pattern.PatternStep
+import com.edge2.remote.prefs.Settings
 import com.edge2.remote.remote.ControllerInfo
 import com.edge2.remote.remote.NetworkUtils
 import com.edge2.remote.remote.RemoteCommand
@@ -116,6 +118,7 @@ class RemoteEngine private constructor(context: Context) {
     private val _shareError = MutableStateFlow(ShareError.NONE)
     val shareError: StateFlow<ShareError> = _shareError.asStateFlow()
 
+    private var customCount = 0
     private val _importedPatterns = MutableStateFlow<List<Pattern>>(emptyList())
     val importedPatterns: StateFlow<List<Pattern>> = _importedPatterns.asStateFlow()
 
@@ -133,7 +136,7 @@ class RemoteEngine private constructor(context: Context) {
         // Foreground service active while a toy is managed OR sharing is on.
         scope.launch {
             combine(toys, _sharing) { list, sharing ->
-                if (list.isEmpty() && !sharing) null else list.joinToString(" · ") { it.displayName }.ifEmpty { "Remote" }
+                if (list.isEmpty() && !sharing) null else list.joinToString(" · ") { it.displayName }.ifEmpty { Settings.wrapLocale(appContext).getString(R.string.app_name) }
             }.distinctUntilChanged().collect { name ->
                 if (name != null) RemoteForegroundService.start(appContext, name)
                 else RemoteForegroundService.stop(appContext)
@@ -174,7 +177,7 @@ class RemoteEngine private constructor(context: Context) {
 
     fun scan() = toyManager.startDiscovery()
     fun stopScan() = toyManager.stopDiscovery()
-    fun connectTo(toy: DiscoveredToy) = toyManager.connectTo(toy)
+    fun connectTo(toy: DiscoveredToy): Boolean = toyManager.connectTo(toy)
     fun disconnect(address: String) = toyManager.disconnect(address)
     fun disconnectAll() { player.cancel(); toyManager.disconnectAll() }
     fun selectTarget(address: String?) { _target.value = address }
@@ -228,8 +231,9 @@ class RemoteEngine private constructor(context: Context) {
             PatternStep(m1 = a.second, m2 = a.third, durationMs = (b.first - a.first).coerceIn(50, 5000))
         }
         if (steps.isEmpty()) return
-        val n = _importedPatterns.value.count { it.name.startsWith("Custom") } + 1
-        _importedPatterns.update { it + Pattern(name = "Custom $n", steps = steps, loop = true) }
+        val n = ++customCount
+        val name = Settings.wrapLocale(appContext).getString(R.string.pattern_custom_fmt, n)
+        _importedPatterns.update { it + Pattern(name = name, steps = steps, loop = true) }
         recBuf.clear()
     }
 
@@ -294,7 +298,7 @@ class RemoteEngine private constructor(context: Context) {
     }
 
     fun importFromText(content: String) {
-        importer.fromText(content.trim())?.let { p -> _importedPatterns.update { it + p } }
+        importer.fromText(content.trim(), Settings.wrapLocale(appContext).getString(R.string.pattern_imported))?.let { p -> _importedPatterns.update { it + p } }
     }
 
     /**

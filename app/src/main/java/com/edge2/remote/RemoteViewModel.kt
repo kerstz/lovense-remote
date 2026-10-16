@@ -35,7 +35,7 @@ class RemoteViewModel(app: Application) : AndroidViewModel(app) {
     // Actions — toys
     fun scan() = engine.scan()
     fun stopScan() = engine.stopScan()
-    fun connectTo(toy: DiscoveredToy) = engine.connectTo(toy)
+    fun connectTo(toy: DiscoveredToy): Boolean = engine.connectTo(toy)
     fun disconnect(address: String) = engine.disconnect(address)
     fun disconnectAll() = engine.disconnectAll()
     fun selectTarget(address: String?) = engine.selectTarget(address)

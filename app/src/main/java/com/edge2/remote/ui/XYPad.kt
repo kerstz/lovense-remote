@@ -14,6 +14,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -50,6 +51,7 @@ fun XYPad(
 ) {
     val c = Edge2.colors
     var size by remember { mutableStateOf(IntSize(1, 1)) }
+    val currentOnChange by rememberUpdatedState(onChange)
 
     Box(
         modifier = modifier
@@ -62,7 +64,7 @@ fun XYPad(
                 fun emit(pos: Offset) {
                     val x = (pos.x / size.width).coerceIn(0f, 1f)
                     val y = (1f - pos.y / size.height).coerceIn(0f, 1f)
-                    onChange(x, y)
+                    currentOnChange(x, y)
                 }
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)

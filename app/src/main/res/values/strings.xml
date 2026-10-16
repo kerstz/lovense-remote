@@ -135,4 +135,14 @@ Only accept if you got this link from someone you trust.</string>
     <string name="hint_press_power">Press the toy\'s power button to authorise the connection</string>
     <string name="hint_pair_pin">Pair the toy in Android Bluetooth settings (PIN 6496)</string>
     <string name="conn_unsupported">not supported yet</string>
+    <!-- T2 -->
+    <string name="err_reconnect_failed">Reconnection failed. Please try again.</string>
+    <!-- T3 -->
+    <string name="conn_scan_ended">Scan ended</string>
+    <string name="err_max_toys">Maximum of %1$d toys reached</string>
+    <string name="action_open_settings">Open settings</string>
+    <!-- T5 -->
+    <string name="pattern_custom_fmt">Custom %1$d</string>
+    <string name="pattern_imported">Imported</string>
+    <string name="pattern_import_chip">+ Lovense</string>
 </resources>

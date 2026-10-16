@@ -10,10 +10,12 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.edge2.remote.MainActivity
 import com.edge2.remote.R
+import com.edge2.remote.prefs.Settings
 
 /**
  * "Connected device" foreground service: keeps the process at foreground
@@ -25,6 +27,10 @@ import com.edge2.remote.R
  */
 class RemoteForegroundService : Service() {
 
+    override fun attachBaseContext(base: Context) {
+        super.attachBaseContext(Settings.wrapLocale(base))
+    }
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -33,7 +39,8 @@ class RemoteForegroundService : Service() {
             stopSelf()
             return START_NOT_STICKY
         }
-        goForeground(intent?.getStringExtra(EXTRA_NAME) ?: "Remote")
+        runCatching { goForeground(intent?.getStringExtra(EXTRA_NAME) ?: getString(R.string.app_name)) }
+            .onFailure { Log.w(TAG, "Foreground start failed", it); stopSelf() }
         // NOT_STICKY: if the process dies, the BLE link is lost anyway → no point
         // restarting an empty service. While the process lives (kept alive by
         // this service), it survives the app being swiped away.
@@ -77,6 +84,7 @@ class RemoteForegroundService : Service() {
     }
 
     companion object {
+        private const val TAG = "RemoteFgService"
         private const val CHANNEL = "edge2_status"
         private const val NOTIF_ID = 1
         private const val EXTRA_NAME = "name"
@@ -85,7 +93,8 @@ class RemoteForegroundService : Service() {
         /** Starts/updates the service with the connected toys' names. */
         fun start(context: Context, name: String) {
             val i = Intent(context, RemoteForegroundService::class.java).putExtra(EXTRA_NAME, name)
-            ContextCompat.startForegroundService(context, i)
+            runCatching { ContextCompat.startForegroundService(context, i) }
+                .onFailure { Log.w(TAG, "startForegroundService refused", it) }
         }
 
         /** Stops the service (no toy, no sharing). */

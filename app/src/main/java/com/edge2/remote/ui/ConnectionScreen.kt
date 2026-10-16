@@ -37,7 +37,11 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import android.content.Intent
+import android.net.Uri
+import com.edge2.remote.ble.ScanFix
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -112,6 +116,8 @@ fun ConnectionScreen(
 ) {
     val c = Edge2.colors
     val error = scanState as? ScanState.Error
+    val ended = scanState is ScanState.Idle
+    val context = LocalContext.current
 
     // Starts (and restarts) the scan as soon as the screen is shown.
     LaunchedEffect(Unit) { onScan() }
@@ -153,6 +159,7 @@ fun ConnectionScreen(
             Text(
                 when {
                     error != null -> error.reason
+                    ended && discovered.isEmpty() -> stringResource(R.string.conn_scan_ended)
                     discovered.isEmpty() -> stringResource(R.string.conn_searching)
                     else -> stringResource(R.string.conn_count, discovered.size)
                 },
@@ -176,7 +183,22 @@ fun ConnectionScreen(
         // No weight() inside a scrolling column: plain spacing.
         Spacer(Modifier.size(12.dp))
 
-        if (error != null) {
+        if (error != null && error.fix != ScanFix.NONE) {
+            Text(
+                stringResource(R.string.action_open_settings), color = c.ink, fontWeight = FontWeight.SemiBold, fontSize = 13.sp,
+                modifier = Modifier.align(Alignment.CenterHorizontally)
+                    .clip(RoundedCornerShape(12.dp)).border(1.dp, c.outline, RoundedCornerShape(12.dp))
+                    .clickable {
+                        val intent = if (error.fix == ScanFix.APP_SETTINGS) {
+                            Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null))
+                        } else {
+                            Intent(android.provider.Settings.ACTION_BLUETOOTH_SETTINGS)
+                        }
+                        runCatching { context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                    }.padding(horizontal = 18.dp, vertical = 10.dp),
+            )
+        }
+        if (error != null || ended) {
             Text(
                 stringResource(R.string.conn_retry), color = c.ink, fontWeight = FontWeight.SemiBold, fontSize = 13.sp,
                 modifier = Modifier.align(Alignment.CenterHorizontally)

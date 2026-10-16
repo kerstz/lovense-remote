@@ -9,6 +9,7 @@ import kotlinx.serialization.Serializable
  * [m1] = actuator 1, [m2] = actuator 2, both on the shared 0..20 scale.
  */
 @Serializable
+@androidx.compose.runtime.Immutable
 data class PatternStep(
     val m1: Int,
     val m2: Int,
@@ -31,6 +32,7 @@ data class PatternStep(
  * ```
  */
 @Serializable
+@androidx.compose.runtime.Immutable
 data class Pattern(
     val name: String,
     val steps: List<PatternStep>,

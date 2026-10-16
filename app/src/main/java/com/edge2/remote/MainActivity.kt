@@ -100,8 +100,8 @@ private fun App(onSettings: () -> Unit) {
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions(),
     ) { result ->
-        val bleOk = result.filterKeys { it != Manifest.permission.POST_NOTIFICATIONS }.all { it.value }
-        if (bleOk) vm.scan()
+        // Always scan: ToyManager publishes Error(err_perms) when permissions are missing.
+        vm.scan()
     }
 
     fun requestScan() {
@@ -127,7 +127,7 @@ private fun App(onSettings: () -> Unit) {
             discovered = discovered,
             connectedCount = toys.size,
             onScan = ::requestScan,
-            onSelect = { vm.connectTo(it); adding = false },
+            onSelect = { if (vm.connectTo(it)) adding = false },
             onBack = if (toys.isNotEmpty()) ({ vm.stopScan(); adding = false }) else null,
             onSettings = onSettings,
         )
