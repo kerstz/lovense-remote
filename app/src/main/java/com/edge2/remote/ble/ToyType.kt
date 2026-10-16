@@ -34,6 +34,7 @@ enum class ActuatorKind {
 }
 
 /** A concrete actuator: kind + the toy's own value range. */
+@androidx.compose.runtime.Immutable
 data class Actuator(
     /** Feature index, as the protocol expects it. */
     val featureIndex: Int,
@@ -67,6 +68,7 @@ data class Actuator(
 }
 
 /** A toy model: protocol, brand, display name, actuators. */
+@androidx.compose.runtime.Immutable
 data class ToyType(
     val protocolId: String,
     val brand: String,

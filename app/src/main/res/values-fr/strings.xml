@@ -135,4 +135,14 @@ N\'accepte que si tu as reçu ce lien de quelqu\'un de confiance.</string>
     <string name="hint_press_power">Appuie sur le bouton du jouet pour autoriser la connexion</string>
     <string name="hint_pair_pin">Appaire le jouet dans les réglages Bluetooth d\'Android (PIN 6496)</string>
     <string name="conn_unsupported">pas encore pris en charge</string>
+    <!-- T2 -->
+    <string name="err_reconnect_failed">Échec de la reconnexion. Veuillez réessayer.</string>
+    <!-- T3 -->
+    <string name="conn_scan_ended">Recherche terminée</string>
+    <string name="err_max_toys">Maximum de %1$d jouets atteint</string>
+    <string name="action_open_settings">Ouvrir les réglages</string>
+    <!-- T5 -->
+    <string name="pattern_custom_fmt">Perso %1$d</string>
+    <string name="pattern_imported">Importé</string>
+    <string name="pattern_import_chip">+ Lovense</string>
 </resources>

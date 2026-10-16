@@ -18,8 +18,10 @@ import com.edge2.remote.ble.proto.Hint
 import com.edge2.remote.ble.proto.ProtocolHandler
 import com.edge2.remote.ble.proto.Protocols
 import com.edge2.remote.ble.proto.Write
+import com.edge2.remote.prefs.Settings
 import java.util.UUID
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -61,7 +63,14 @@ class ToyConnection(
     private val manufacturerData: Map<Int, ByteArray>,
 ) {
     private val appContext = context.applicationContext
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val scope = CoroutineScope(
+        SupervisorJob() + Dispatchers.Default +
+            CoroutineExceptionHandler { _, t ->
+                android.util.Log.w("ToyConnection", "uncaught: ${t.message}", t)
+                // Session loops are cancelled by the failure: drop the link so it reconnects (bounded by MAX_RECONNECT).
+                retry()
+            },
+    )
 
     val address: String = device.address
 
@@ -101,7 +110,7 @@ class ToyConnection(
     @Volatile private var lastWrite: Write? = null
     @Volatile private var lastWriteAt = 0L
 
-    private fun str(resId: Int): String = appContext.getString(resId)
+    private fun str(resId: Int): String = Settings.wrapLocale(appContext).getString(resId)
 
     // ====================================================================
     // API
@@ -259,7 +268,15 @@ class ToyConnection(
 
     private fun connectGatt() {
         _status.update { it.copy(link = if (reconnectAttempts > 0) LinkState.Reconnecting else LinkState.Connecting) }
-        gatt = device.connectGatt(appContext, /* autoConnect = */ false, callback, BluetoothDevice.TRANSPORT_LE)
+        val g = runCatching {
+            device.connectGatt(appContext, /* autoConnect = */ false, callback, BluetoothDevice.TRANSPORT_LE)
+        }.onFailure { android.util.Log.w("ToyConnection", "connectGatt failed: ${it.message}") }.getOrNull()
+        if (g == null) {
+            closed = true
+            _status.update { it.copy(link = LinkState.Error(str(R.string.err_perms))) }
+            return
+        }
+        gatt = g
     }
 
     private val callback = object : BluetoothGattCallback() {
@@ -383,6 +400,7 @@ class ToyConnection(
         if (closed) return
         // Auto-reconnect to the SAME toy with back-off: 1, 2, 4, 8 s (capped).
         reconnectAttempts++
+        if (reconnectAttempts > MAX_RECONNECT) { fatal(str(R.string.err_reconnect_failed)); return }
         _status.update { it.copy(link = LinkState.Reconnecting) }
         delay(1_000L shl (reconnectAttempts - 1).coerceAtMost(3))
         if (!closed) connectGatt()
@@ -486,5 +504,9 @@ class ToyConnection(
             runCatching { h.battery(io) }.getOrNull()?.let { b -> _status.update { it.copy(battery = b.coerceIn(0, 100)) } }
             delay(60_000)
         }
+    }
+
+    private companion object {
+        const val MAX_RECONNECT = 6
     }
 }

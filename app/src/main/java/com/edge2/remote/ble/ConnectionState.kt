@@ -7,8 +7,11 @@ sealed interface ScanState {
     data object Idle : ScanState
     data object Scanning : ScanState
     /** Failure (missing permission, Bluetooth off, scanner unavailable…). */
-    data class Error(val reason: String) : ScanState
+    data class Error(val reason: String, val fix: ScanFix = ScanFix.NONE) : ScanState
 }
+
+/** Settings screen that can resolve a scan error. */
+enum class ScanFix { NONE, APP_SETTINGS, BT_SETTINGS }
 
 /** BLE link state of ONE toy. */
 sealed interface LinkState {
@@ -26,6 +29,7 @@ sealed interface LinkState {
  * Snapshot of a managed toy (connected or connecting), exposed to the UI, to
  * sharing and to the notification. [levels] = level actually sent to each actuator.
  */
+@androidx.compose.runtime.Immutable
 data class ToyStatus(
     val address: String,
     val toy: ToyType,
@@ -43,6 +47,7 @@ data class ToyStatus(
  * A toy seen during the scan (before connecting). The list feeds the add-a-toy
  * screen: only toys that are actually visible nearby are shown.
  */
+@androidx.compose.runtime.Immutable
 data class DiscoveredToy(
     val address: String,
     val bleName: String,

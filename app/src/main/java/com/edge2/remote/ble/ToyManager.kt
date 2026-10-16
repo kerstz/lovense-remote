@@ -16,10 +16,12 @@ import com.edge2.remote.ble.db.Advertisement
 import com.edge2.remote.ble.db.DbProtocol
 import com.edge2.remote.ble.db.DeviceDatabase
 import com.edge2.remote.ble.proto.Protocols
+import com.edge2.remote.prefs.Settings
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -41,7 +43,7 @@ class ToyManager(context: Context) {
     private val appContext = context.applicationContext
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
-    private fun str(resId: Int, vararg args: Any): String = appContext.getString(resId, *args)
+    private fun str(resId: Int, vararg args: Any): String = Settings.wrapLocale(appContext).getString(resId, *args)
 
     private val bluetoothManager =
         appContext.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
@@ -60,6 +62,7 @@ class ToyManager(context: Context) {
     private val connections = ConcurrentHashMap<String, ToyConnection>()
     private val order = mutableListOf<String>()
     private var aggregator: Job? = null
+    private var scanTimeoutJob: Job? = null
 
     /** Device database (assets/devices.json), loaded once. */
     val database: DeviceDatabase by lazy {
@@ -75,9 +78,9 @@ class ToyManager(context: Context) {
     // ====================================================================
 
     fun startDiscovery() {
-        if (!hasPermissions()) { _scanState.value = ScanState.Error(str(R.string.err_perms)); return }
+        if (!hasPermissions()) { _scanState.value = ScanState.Error(str(R.string.err_perms), ScanFix.APP_SETTINGS); return }
         val a = adapter
-        if (a == null || !a.isEnabled) { _scanState.value = ScanState.Error(str(R.string.err_bt_off)); return }
+        if (a == null || !a.isEnabled) { _scanState.value = ScanState.Error(str(R.string.err_bt_off), ScanFix.BT_SETTINGS); return }
         val scanner = a.bluetoothLeScanner ?: run {
             _scanState.value = ScanState.Error(str(R.string.err_scanner)); return
         }
@@ -88,9 +91,13 @@ class ToyManager(context: Context) {
         // devices are identified in onScanResult through the device database.
         scanner.startScan(null, settings, scanCallback)
         _scanState.value = ScanState.Scanning
+        scanTimeoutJob?.cancel()
+        scanTimeoutJob = scope.launch { delay(30_000); stopDiscovery() }
     }
 
     fun stopDiscovery() {
+        scanTimeoutJob?.cancel()
+        scanTimeoutJob = null
         runCatching { adapter?.bluetoothLeScanner?.stopScan(scanCallback) }
         if (_scanState.value is ScanState.Scanning) _scanState.value = ScanState.Idle
     }
@@ -130,14 +137,18 @@ class ToyManager(context: Context) {
     // ====================================================================
 
     /** Adds the chosen toy (several toys can be connected at the same time). */
-    fun connectTo(found: DiscoveredToy) {
-        val a = adapter ?: return
-        if (connections.containsKey(found.address)) return
-        if (connections.size >= MAX_TOYS) return
-        if (!found.supported) return
-        val s = seen[found.address] ?: return
+    fun connectTo(found: DiscoveredToy): Boolean {
+        val a = adapter ?: return false
+        if (connections.containsKey(found.address)) return true
+        if (connections.size >= MAX_TOYS) {
+            stopDiscovery()
+            _scanState.value = ScanState.Error(str(R.string.err_max_toys, MAX_TOYS)); return false
+        }
+        if (!found.supported) return false
+        val s = seen[found.address] ?: return false
         val device = runCatching { a.getRemoteDevice(found.address) }.getOrNull() ?: run {
-            _scanState.value = ScanState.Error(str(R.string.err_device_gone)); return
+            stopDiscovery()
+            _scanState.value = ScanState.Error(str(R.string.err_device_gone)); return false
         }
         stopDiscovery()
         val conn = ToyConnection(appContext, device, database, s.protocol, s.name, s.mfr)
@@ -148,6 +159,7 @@ class ToyManager(context: Context) {
         _discovered.update { l -> l.filterNot { it.address == found.address } }
         rebuildAggregator()
         conn.connect()
+        return true
     }
 
     /** Removes a toy (motors stopped, then disconnected, no auto-reconnect). */

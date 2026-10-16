@@ -70,6 +70,9 @@ import com.edge2.remote.ui.theme.Edge2
 import com.edge2.remote.ui.theme.JetBrainsMono
 import kotlin.math.roundToInt
 import kotlin.math.sin
+import androidx.compose.ui.graphics.ImageBitmap
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
  * Main screen — **multi-toy**: a selector (All / each toy / + Toy) picks the
@@ -195,7 +198,7 @@ fun RemoteScreen(vm: RemoteViewModel, onAddToy: () -> Unit, onSettings: () -> Un
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 row.forEachIndexed { i, p ->
                     if (p == null) {
-                        PatternChip("+ Lovense", -1, false, Modifier.weight(1f)) { importOpen = true }
+                        PatternChip(stringResource(R.string.pattern_import_chip), -1, false, Modifier.weight(1f)) { importOpen = true }
                     } else {
                         PatternChip(p.name, i, playing == p.name, Modifier.weight(1f)) {
                             if (playing == p.name) vm.stopAll() else vm.playPattern(p)
@@ -751,8 +754,16 @@ private fun ShareBlock(title: String, hint: String, url: String) {
                 context.startActivity(Intent.createChooser(send, context.getString(R.string.share_via)))
             }
         }
-        val qr = remember(url) { NetworkUtils.qrBitmap(url, 480).asImageBitmap() }
-        Image(bitmap = qr, contentDescription = stringResource(R.string.qr_desc), modifier = Modifier.size(200.dp))
+        var qr by remember(url) { mutableStateOf<ImageBitmap?>(null) }
+        LaunchedEffect(url) {
+            qr = withContext(Dispatchers.Default) { NetworkUtils.qrBitmap(url, 480).asImageBitmap() }
+        }
+        val qrImage = qr
+        if (qrImage != null) {
+            Image(bitmap = qrImage, contentDescription = stringResource(R.string.qr_desc), modifier = Modifier.size(200.dp))
+        } else {
+            Box(Modifier.size(200.dp))
+        }
     }
 }
 
