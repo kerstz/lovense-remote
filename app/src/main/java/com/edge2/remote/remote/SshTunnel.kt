@@ -15,7 +15,6 @@ import net.schmizz.sshj.SSHClient
 import net.schmizz.sshj.common.KeyType
 import net.schmizz.sshj.connection.channel.forwarded.RemotePortForwarder
 import net.schmizz.sshj.connection.channel.forwarded.SocketForwardingConnectListener
-import net.schmizz.sshj.common.Buffer
 import net.schmizz.sshj.transport.verification.HostKeyVerifier
 import net.schmizz.sshj.userauth.keyprovider.KeyProvider
 import org.bouncycastle.jce.provider.BouncyCastleProvider
@@ -24,7 +23,6 @@ import java.net.InetSocketAddress
 import java.security.KeyFactory
 import java.security.KeyPair
 import java.security.KeyPairGenerator
-import java.security.MessageDigest
 import java.security.PublicKey
 import java.security.Security
 import java.security.interfaces.RSAPrivateCrtKey
@@ -52,12 +50,11 @@ class SshTunnel(context: Context, private val scope: CoroutineScope) {
     // share (tied to the key) → a shared link can stay valid.
     private val keyFile = File(context.filesDir, "lhr_id_rsa")
 
-    /** Fingerprint of the relay host key, remembered on first connection (TOFU). */
-    private val knownHostFile = File(context.filesDir, "lhr_known_host")
+    /** Relay host key, remembered on first connection (TOFU) — see [TofuHostKeyStore]. */
+    private val hostKeys = TofuHostKeyStore(File(context.filesDir, "lhr_known_host"))
 
     /** true if the relay host key CHANGED (possible interception) → tunnel refused. */
-    private val _hostKeyMismatch = MutableStateFlow(false)
-    val hostKeyMismatch: StateFlow<Boolean> = _hostKeyMismatch.asStateFlow()
+    val hostKeyMismatch: StateFlow<Boolean> = hostKeys.mismatch
 
     private val _publicUrl = MutableStateFlow<String?>(null)
     val publicUrl: StateFlow<String?> = _publicUrl.asStateFlow()
@@ -71,7 +68,7 @@ class SshTunnel(context: Context, private val scope: CoroutineScope) {
         // The loop may have ended (host key refused): only skip if it is still running.
         if (job?.isActive == true) return
         job = scope.launch(Dispatchers.IO) {
-            while (isActive && !_hostKeyMismatch.value) {
+            while (isActive && !hostKeyMismatch.value) {
                 runCatching { runTunnel(localPort) }
                     .onFailure { android.util.Log.w("SshTunnel", "tunnel failed: ${it.message}") }
                 _publicUrl.value = null
@@ -118,36 +115,19 @@ class SshTunnel(context: Context, private val scope: CoroutineScope) {
 
     private val tofuVerifier = object : HostKeyVerifier {
         override fun verify(hostname: String, port: Int, key: PublicKey): Boolean {
-            val fp = fingerprint(key)
-            val known = runCatching { knownHostFile.readText().trim() }.getOrNull()
-            if (known.isNullOrEmpty()) {
-                runCatching { knownHostFile.writeText(fp) }
-                return true
-            }
-            if (known == fp) return true
-            android.util.Log.w("SshTunnel", "relay host key changed — connection refused")
-            _hostKeyMismatch.value = true
-            return false
+            val ok = hostKeys.verify(TofuHostKeyStore.fingerprint(key))
+            if (!ok) android.util.Log.w("SshTunnel", "relay host key changed — connection refused")
+            return ok
         }
 
         override fun findExistingAlgorithms(hostname: String, port: Int): List<String> = emptyList()
-    }
-
-    /** SHA-256 (base64) of the public key's SSH blob — `ssh-keygen -l` format. */
-    private fun fingerprint(key: PublicKey): String {
-        val blob = Buffer.PlainBuffer().putPublicKey(key).compactData
-        val d = MessageDigest.getInstance("SHA-256").digest(blob)
-        return "SHA256:" + java.util.Base64.getEncoder().withoutPadding().encodeToString(d)
     }
 
     /**
      * The user explicitly accepts the relay's new key (after a legitimate
      * change on localhost.run's side): forget the old one.
      */
-    fun trustNewHostKey() {
-        runCatching { knownHostFile.delete() }
-        _hostKeyMismatch.value = false
-    }
+    fun trustNewHostKey() = hostKeys.trustNew()
 
     /** Loads the persisted RSA key, or generates and saves one (PKCS8). */
     private fun persistentKeyPair(): KeyPair {
