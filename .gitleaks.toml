@@ -1,0 +1,12 @@
+# gitleaks configuration: default rules plus allow-listed public values.
+title = "lovense-remote"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Public values that look like secrets"
+paths = [
+  # SHA-256 fingerprint of the release signing certificate (public; F-Droid needs it).
+  '''fdroid/com\.edge2\.remote\.yml''',
+]
