@@ -6,7 +6,8 @@ useDefault = true
 
 [allowlist]
 description = "Public values that look like secrets"
-paths = [
+# Only this exact value is allowed: any other secret in any file is still reported.
+regexes = [
   # SHA-256 fingerprint of the release signing certificate (public; F-Droid needs it).
-  '''fdroid/com\.edge2\.remote\.yml''',
+  '''6dd5498bc71bde6de310979e26065e575ec0c19301d77ad079f91197bbe2a3bb''',
 ]
