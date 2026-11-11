@@ -125,6 +125,7 @@
 N\'accepte que si tu as reçu ce lien de quelqu\'un de confiance.</string>
     <string name="ctrl_waiting">En attente de l\'accord de l\'hôte…</string>
     <string name="ctrl_denied">Accès refusé ou session terminée</string>
+    <string name="ctrl_unreachable">Hôte injoignable · le partage est peut-être terminé</string>
 
     <!-- Toy features -->
     <string name="kind_thrust">Va-et-vient</string>

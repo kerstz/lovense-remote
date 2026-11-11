@@ -124,6 +124,7 @@
 Acepta solo si recibiste este enlace de alguien de confianza.</string>
     <string name="ctrl_waiting">Esperando la aprobación del anfitrión…</string>
     <string name="ctrl_denied">Acceso denegado o sesión terminada</string>
+    <string name="ctrl_unreachable">Anfitrión inaccesible · puede que el uso compartido haya terminado</string>
 
     <!-- Toy features -->
     <string name="kind_thrust">Empuje</string>

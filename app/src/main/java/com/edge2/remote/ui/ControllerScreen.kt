@@ -106,6 +106,7 @@ private fun ControllerContent(wsUrl: String, pin: String) {
             RemoteController.Phase.LIVE -> stringResource(R.string.ctrl_live) to c.live
             RemoteController.Phase.WAITING -> stringResource(R.string.ctrl_waiting) to c.muted
             RemoteController.Phase.DENIED -> stringResource(R.string.ctrl_denied) to c.danger
+            RemoteController.Phase.UNREACHABLE -> stringResource(R.string.ctrl_unreachable) to c.danger
             RemoteController.Phase.CONNECTING -> stringResource(R.string.ctrl_connecting) to c.muted
         }
         Row(
@@ -119,6 +120,10 @@ private fun ControllerContent(wsUrl: String, pin: String) {
             Column(Modifier.weight(1f)) {
                 Text(title, color = c.ink, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
                 Text(stringResource(R.string.ctrl_sub), color = if (live) c.live else c.muted, fontSize = 11.sp)
+            }
+            // Host unreachable (not a refusal): retry, keeping the resume token for the same host.
+            if (phase == RemoteController.Phase.UNREACHABLE) {
+                TextButton(onClick = { controller.connect(wsUrl, pin) }) { Text(stringResource(R.string.conn_retry)) }
             }
         }
 

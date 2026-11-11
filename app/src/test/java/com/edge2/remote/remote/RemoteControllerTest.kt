@@ -86,7 +86,27 @@ class RemoteControllerTest {
         val dead = ws
         server.stop() // nobody listens any more
         controller.connect(dead, "123456")
-        awaitPhase(controller, Phase.DENIED, 10_000)
+        // Unreachable is not a refusal: its own phase, and the user may retry.
+        awaitPhase(controller, Phase.UNREACHABLE, 10_000)
+        controller.connect(dead, "123456")
+        assertEquals(Phase.CONNECTING, controller.phase.value)
+    }
+
+    @Test fun retryToTheSameHostKeepsTheApproval() = runBlocking {
+        controller.connect(ws, server.pin)
+        withTimeout(3_000) { while (server.controllers.value.isEmpty()) delay(20) }
+        server.approve(server.controllers.value.single().id)
+        awaitPhase(controller, Phase.LIVE)
+        delay(200) // TOKEN + ACK
+        // Retry (same host): resumes with its token, no new approval needed.
+        controller.connect(ws, server.pin)
+        awaitPhase(controller, Phase.LIVE)
+        withTimeout(3_000) { while (server.controllers.value.singleOrNull()?.approved != true) delay(20) }
+    }
+
+    @Test fun tokenScopeIsTheHost() {
+        assertEquals("abc.lhr.life", RemoteController.hostOf("wss://ABC.lhr.life/ws/x"))
+        assertEquals(null, RemoteController.hostOf("not a url"))
     }
 
     @Test fun deepLinkValidationRejectsAnythingButOurWebSocketPath() {

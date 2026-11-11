@@ -34,7 +34,11 @@ class RemoteController(
     private val maxReconnects: Int = MAX_RECONNECTS,
 ) {
 
-    enum class Phase { CONNECTING, WAITING, LIVE, DENIED }
+    /**
+     * [DENIED]: refused by the host (wrong PIN, kicked, burnt share) — final.
+     * [UNREACHABLE]: no answer from the host for ~1 min — the user may retry.
+     */
+    enum class Phase { CONNECTING, WAITING, LIVE, DENIED, UNREACHABLE }
 
     private val client = HttpClient(CIO) {
         install(WebSockets) {
@@ -55,11 +59,15 @@ class RemoteController(
     private val wake = Channel<Unit>(Channel.CONFLATED)
     private var job: Job? = null
     @Volatile private var token: String? = null
+    /** Host the current [token] belongs to. */
+    @Volatile private var tokenHost: String? = null
 
+    /** Connects (or retries) to [wsUrl]. The resume token is kept on a retry to the same host. */
     fun connect(wsUrl: String, pin: String) {
         disconnect()
         // A resume token is bound to one host's share: never offer it to another host.
-        token = null
+        val host = hostOf(wsUrl)
+        if (host == null || host != tokenHost) { token = null; tokenHost = host }
         _phase.value = Phase.CONNECTING
         job = scope.launch {
             var failures = 0 // consecutive attempts without a single frame from the host
@@ -79,7 +87,11 @@ class RemoteController(
                         try {
                             for (frame in incoming) {
                                 failures = 0
-                                if (frame is Frame.Text) onMessage(frame.readText())
+                                if (frame !is Frame.Text) continue
+                                val text = frame.readText()
+                                onMessage(text)
+                                // Tell the host the new token is stored: only then is the old one burnt.
+                                if (text.startsWith("TOKEN:")) token?.let { outgoing.send(Frame.Text("ACK:$it")) }
                             }
                         } finally {
                             sender.cancel()
@@ -89,7 +101,7 @@ class RemoteController(
                 if (_phase.value != Phase.DENIED) {
                     // The host stopped sharing (or is unreachable): give up after ~1 min
                     // instead of knocking forever.
-                    if (++failures >= maxReconnects) { _phase.value = Phase.DENIED; break }
+                    if (++failures >= maxReconnects) { _phase.value = Phase.UNREACHABLE; break }
                     _phase.value = Phase.CONNECTING
                     delay(reconnectDelayMs) // reconnect (with the resume token if approved)
                 }
@@ -154,6 +166,10 @@ class RemoteController(
             if (!Regex("/ws/[A-Za-z0-9_-]{16,64}").matches(u.rawPath ?: "")) return null
             return raw
         }
+
+        /** Lower-cased host of [wsUrl] (the scope of a resume token), or null. */
+        internal fun hostOf(wsUrl: String): String? =
+            runCatching { URI(wsUrl).host?.lowercase() }.getOrNull()
 
         fun validatePin(raw: String?): String? = raw?.takeIf { Regex("[0-9]{4,8}").matches(it) }
     }

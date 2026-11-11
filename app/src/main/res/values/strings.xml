@@ -125,6 +125,7 @@
 Only accept if you got this link from someone you trust.</string>
     <string name="ctrl_waiting">Waiting for the host\'s approval…</string>
     <string name="ctrl_denied">Access denied or session ended</string>
+    <string name="ctrl_unreachable">Host unreachable · the share may have ended</string>
 
     <!-- Toy features -->
     <string name="kind_thrust">Thrust</string>
