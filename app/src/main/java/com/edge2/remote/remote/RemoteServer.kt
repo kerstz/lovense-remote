@@ -40,17 +40,21 @@ data class ControllerInfo(val id: Int, val approved: Boolean)
 /**
  * Embedded HTTP + WebSocket server (host mode). Defence in depth:
  *
- *  1. **Secret link**: `GET /s/{id}` and `WS /ws/{id}` only exist for the
- *     current session id (128 bits, SecureRandom, regenerated on every share).
+ *  1. **Secret link**: `GET /s/{id}`, its fonts and `WS /ws/{id}` only exist for
+ *     the current session id (128 bits, SecureRandom, regenerated on every
+ *     share). Nothing is served outside the link, so a LAN scanner cannot even
+ *     tell that this app is running.
  *  2. **6-digit PIN**, sent in the first WS message (never in the URL → absent
  *     from relay logs), compared in constant time. **5 failures burn the
- *     session** ([onLockout]): no brute force possible.
+ *     session**: the server itself refuses every further attempt — even with
+ *     the right PIN — and tells the host ([onLockout]); no brute force possible.
  *  3. **Host approval PER controller**: an authenticated controller stays
- *     "pending" (commands ignored) until the host approves THAT controller.
- *     Once approved, a resume token lets it reconnect (network blip) without
- *     asking again. The token is bound to the session it was issued for:
- *     kicking that controller ([kick]) revokes it, so it must be re-approved.
- *  4. **Anti-CSWSH**: `Origin` must point to our own host.
+ *     "pending" (commands ignored, host state hidden) until the host approves
+ *     THAT controller. Once approved, a resume token lets it reconnect (network
+ *     blip) without asking again. The token is **single use**: each resume
+ *     burns it and issues a new one, so a copy captured in transit (e.g. by the
+ *     relay) cannot be replayed; kicking the controller ([kick]) revokes it.
+ *  4. **Anti-CSWSH**: `Origin` must name our own host *and* port.
  *  5. **Anti-DoS**: frames ≤ 256 B, rate limiting, max 3 sockets,
  *     authentication within 10 s, pending approval ≤ 2 min.
  *  6. **Minimal network surface**: listens on 127.0.0.1 (tunnel) + the Wi-Fi
@@ -108,8 +112,10 @@ class RemoteServer(
     private val sessions = ConcurrentHashMap<Int, Session>()
     private val nextId = AtomicInteger(1)
     private val failedPins = AtomicInteger(0)
+    /** Set after [MAX_PIN_FAILURES]: the share is burnt until the next [start]. */
+    private val lockedOut = AtomicBoolean(false)
     private val openSockets = AtomicInteger(0)
-    /** Resume tokens issued to approved controllers (valid for this session). */
+    /** Resume tokens issued to approved controllers (valid once, for this session). */
     private val resumeTokens = ConcurrentHashMap.newKeySet<String>()
 
     /** Latest state (toys, …) pushed to controllers, as JSON. */
@@ -137,6 +143,7 @@ class RemoteServer(
         sessionId = ShareSecurity.token(16)
         pin = ShareSecurity.pin(6)
         failedPins.set(0)
+        lockedOut.set(false)
         resumeTokens.clear()
         // Pre-check: if an address can't be bound (network blocked, port taken),
         // do NOT start Ktor — its bind failure also leaks as an uncaught
@@ -160,6 +167,13 @@ class RemoteServer(
         }
     }.isSuccess
 
+    /** true if [id] is the live session (constant time) and the share is not burnt. */
+    private fun sessionOk(id: String?): Boolean =
+        !lockedOut.get() && ShareSecurity.constantTimeEquals(id, sessionId)
+
+    /** The control page with its font URLs bound to [id] (fonts live behind the secret link too). */
+    internal fun pageFor(id: String): String = html.replace("url('/font/", "url('/s/$id/font/")
+
     private fun Application.module() {
         install(WebSockets) {
             pingPeriodMillis = 15_000
@@ -169,18 +183,21 @@ class RemoteServer(
         }
         routing {
             get("/s/{id}") {
-                if (!ShareSecurity.constantTimeEquals(call.parameters["id"], sessionId)) {
+                val id = call.parameters["id"]
+                if (!sessionOk(id)) { call.respondText("", status = HttpStatusCode.NotFound); return@get }
+                call.securityHeaders()
+                call.respondText(pageFor(id!!), ContentType.Text.Html)
+            }
+            // Self-hosted fonts (no external CDN), only through the secret link —
+            // allow-list against path traversal.
+            get("/s/{id}/font/{name}") {
+                val name = call.parameters["name"]
+                if (!sessionOk(call.parameters["id"]) || name !in FONT_ASSETS) {
                     call.respondText("", status = HttpStatusCode.NotFound); return@get
                 }
-                call.securityHeaders()
-                call.respondText(html, ContentType.Text.Html)
-            }
-            // Self-hosted fonts (no external CDN) — allow-list against path traversal.
-            get("/font/{name}") {
-                val name = call.parameters["name"]
-                if (name !in FONT_ASSETS) { call.respondText("", status = HttpStatusCode.NotFound); return@get }
                 val bytes = loadFont(name!!)
                 call.response.header("X-Content-Type-Options", "nosniff")
+                call.response.header(HttpHeaders.CacheControl, CacheControl.NoStore(null).toString())
                 call.respondBytes(bytes, ContentType("font", "ttf"))
             }
             webSocket("/ws/{id}") { handleSocket() }
@@ -198,6 +215,7 @@ class RemoteServer(
 
     private suspend fun DefaultWebSocketServerSession.handleSocket() {
         val policy = CloseReason(CloseReason.Codes.VIOLATED_POLICY, "")
+        // A burnt share still answers DENIED (after the delay) so the page stops reconnecting.
         if (!ShareSecurity.constantTimeEquals(call.parameters["id"], sessionId)) { close(policy); return }
         if (!ShareSecurity.originAllowed(call.request.headers[HttpHeaders.Origin], call.request.headers[HttpHeaders.Host])) {
             close(policy); return
@@ -209,23 +227,29 @@ class RemoteServer(
                 (incoming.receive() as? Frame.Text)?.readText()
             }
             val parts = auth?.takeIf { it.startsWith("AUTH:") }?.removePrefix("AUTH:")?.split(':', limit = 2)
-            if (parts == null || !ShareSecurity.constantTimeEquals(parts[0], pin)) {
-                if (failedPins.incrementAndGet() >= MAX_PIN_FAILURES) onLockout()
+            // Once burnt, the share refuses everyone — the right PIN included — until a new share.
+            val pinOk = !lockedOut.get() && parts != null && ShareSecurity.constantTimeEquals(parts[0], pin)
+            if (!pinOk) {
+                if (failedPins.incrementAndGet() >= MAX_PIN_FAILURES && lockedOut.compareAndSet(false, true)) onLockout()
                 delay(1_000) // slows down guessing
                 runCatching { outgoing.send(Frame.Text("DENIED")) }
                 close(policy)
                 return
             }
-            val resumeToken = parts.getOrNull(1)?.let { tok -> resumeTokens.firstOrNull { ShareSecurity.constantTimeEquals(it, tok) } }
+            // Resume token: constant-time lookup, then atomically burnt (single use).
+            val resumed = parts.getOrNull(1)?.let { tok ->
+                resumeTokens.firstOrNull { ShareSecurity.constantTimeEquals(it, tok) }?.takeIf { resumeTokens.remove(it) }
+            }
 
             // 2. Registration: pending approval (unless resuming an approved controller).
             val s = Session(nextId.getAndIncrement(), this)
-            if (resumeToken != null) {
-                s.token = resumeToken
+            if (resumed != null) {
                 s.approved.set(true)
+                s.token = issueToken()
             }
             sessions[s.id] = s
             publish()
+            s.token?.let { outgoing.send(Frame.Text("TOKEN:$it")) }
             outgoing.send(Frame.Text("STATE:" + stateFor(s)))
             val approvalTimeout = launch {
                 delay(120_000)
@@ -256,13 +280,15 @@ class RemoteServer(
         }
     }
 
+    /** New resume token, registered as valid for this share. */
+    private fun issueToken(): String = ShareSecurity.token(16).also { resumeTokens += it }
+
     /** The host approves controller [id]: commands allowed + resume token. */
     fun approve(id: Int) {
         val s = sessions[id] ?: return
         if (!s.approved.compareAndSet(false, true)) return
-        val tok = ShareSecurity.token(16)
+        val tok = issueToken()
         s.token = tok
-        resumeTokens += tok
         s.ws.launch {
             runCatching {
                 s.ws.outgoing.send(Frame.Text("TOKEN:$tok"))
@@ -296,8 +322,9 @@ class RemoteServer(
         }
     }
 
+    /** Host details (toy names are intimate data) only once the host has approved this controller. */
     private fun stateFor(s: Session): String =
-        "{\"approved\":${s.approved.get()},\"host\":$lastState}"
+        if (s.approved.get()) "{\"approved\":true,\"host\":$lastState}" else "{\"approved\":false,\"host\":{}}"
 
     private fun publish() {
         _controllers.value = sessions.values.sortedBy { it.id }.map { ControllerInfo(it.id, it.approved.get()) }

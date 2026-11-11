@@ -6,7 +6,7 @@
 <meta name="referrer" content="no-referrer">
 <title>Remote — Control</title>
 <style>
-  /* Self-hosted fonts (served by the app via /font/, no external CDN call). */
+  /* Self-hosted fonts, no external CDN call. The app serves them behind the secret link: the server rewrites /font/ to /s/<id>/font/ when serving this page. */
   @font-face { font-family: 'Space Grotesk'; font-style: normal; font-weight: 400 700; font-display: swap; src: url('/font/space_grotesk.ttf') format('truetype'); }
   @font-face { font-family: 'JetBrains Mono'; font-style: normal; font-weight: 500 700; font-display: swap; src: url('/font/jetbrains_mono.ttf') format('truetype'); }
   :root { color-scheme: dark; }
