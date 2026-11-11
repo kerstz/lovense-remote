@@ -89,6 +89,8 @@ jobs:
   osv-scan:
     name: OSV vulnerability scan
     needs: lockfile
+    # No `timeout-minutes` here: GitHub rejects it on a job that calls a reusable
+    # workflow (`uses:`); the called workflow's own job settings apply.
     permissions:
       actions: read
       contents: read
