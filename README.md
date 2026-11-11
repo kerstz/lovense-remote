@@ -146,16 +146,21 @@ Read the full [privacy policy](PRIVACY.md).
 Knowing the link is never enough to control your toys:
 
 - **Secret link** — 128-bit random id, new on every share; old links die at once.
+  Nothing (not even the page's fonts) is served outside the link, so a network
+  scanner can't tell the app is running.
 - **6-digit PIN** — never in the URL, checked in constant time; **5 wrong codes
-  stop the share**.
+  burn the share**: the server then refuses everyone, right code included, until
+  you start a new share.
 - **Your approval, per person** — you accept (or kick) each controller
-  individually.
-- **Hardened web page** — strict CSP, anti-framing, `Origin` check against
-  cross-site WebSocket hijacking, small frames, rate limiting, max 3 sockets,
-  10 s to authenticate.
+  individually; until you accept, a controller sees nothing (not even your toy
+  names). Reconnection tokens are single use, so a copy can't be replayed.
+- **Hardened web page** — strict CSP, anti-framing, `Origin` check (same host
+  *and* port) against cross-site WebSocket hijacking, small frames, rate
+  limiting, max 3 sockets, 10 s to authenticate.
 - **Minimal network surface** — listens only on 127.0.0.1 and the Wi-Fi IP,
   never on mobile data / VPN interfaces.
-- **Pinned relay key** — nobody can impersonate the internet relay.
+- **Relay key remembered** — the relay's SSH key is pinned on first use; if it
+  ever changes, the internet link is refused until you re-accept it.
 - **No backups** of app data; deep links are validated and need your OK.
 - **Discreet** — screenshots blocked, hidden in Recents, neutral notification on
   the lock screen.
@@ -164,7 +169,8 @@ Knowing the link is never enough to control your toys:
 trust). Internet sharing goes through [localhost.run](https://localhost.run), a
 third party that can see the control traffic — the PIN and your approval remain
 the gate. If you use a firewall app, allow **network access** for this app or
-sharing can't start.
+sharing can't start. The full threat model and its known limits are in
+[SECURITY.md](SECURITY.md).
 
 ## ❓ FAQ
 

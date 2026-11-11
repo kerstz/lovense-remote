@@ -148,17 +148,24 @@ Lis la [politique de confidentialité](PRIVACY.md#politique-de-confidentialité)
 Connaître le lien ne suffit jamais pour piloter tes toys :
 
 - **Lien secret** — identifiant aléatoire de 128 bits, nouveau à chaque partage ;
-  les anciens liens meurent immédiatement.
+  les anciens liens meurent immédiatement. Rien (pas même les polices de la
+  page) n'est servi hors du lien : un scanner réseau ne peut pas deviner que
+  l'app tourne.
 - **PIN à 6 chiffres** — jamais dans l'URL, vérifié en temps constant ; **5 codes
-  faux coupent le partage**.
+  faux brûlent le partage** : le serveur refuse alors tout le monde, bon code
+  compris, jusqu'à un nouveau partage.
 - **Ton accord, pour chaque personne** — tu acceptes (ou éjectes) chaque
-  contrôleur individuellement.
-- **Page web durcie** — CSP stricte, anti-iframe, contrôle de l'`Origin` contre
-  le détournement de WebSocket, petites trames, limitation de débit, 3 sockets
-  max, 10 s pour s'authentifier.
+  contrôleur individuellement ; tant que tu n'as pas accepté, un contrôleur ne
+  voit rien (pas même le nom de tes toys). Les jetons de reconnexion sont à
+  usage unique : une copie ne peut pas être rejouée.
+- **Page web durcie** — CSP stricte, anti-iframe, contrôle de l'`Origin` (même
+  hôte *et* même port) contre le détournement de WebSocket, petites trames,
+  limitation de débit, 3 sockets max, 10 s pour s'authentifier.
 - **Surface réseau minimale** — écoute seulement sur 127.0.0.1 et l'IP Wi-Fi,
   jamais sur les données mobiles / le VPN.
-- **Clé du relais mémorisée** — personne ne peut se faire passer pour le relais internet.
+- **Clé du relais mémorisée** — la clé SSH du relais est épinglée à la première
+  connexion ; si elle change, le lien internet est refusé jusqu'à ce que tu la
+  ré-acceptes.
 - **Aucune sauvegarde** des données de l'app ; les deep links sont validés et
   demandent ta confirmation.
 - **Discrétion** — captures d'écran bloquées, contenu masqué dans les apps
@@ -169,6 +176,8 @@ Connaître le lien ne suffit jamais pour piloter tes toys :
 [localhost.run](https://localhost.run), un tiers qui peut voir le trafic de
 contrôle — le PIN et ton accord restent la barrière. Si tu utilises un pare-feu,
 autorise l'**accès réseau** pour l'app, sinon le partage ne peut pas démarrer.
+Le modèle de menace complet et ses limites connues sont dans
+[SECURITY.md](SECURITY.md).
 
 ## ❓ FAQ
 

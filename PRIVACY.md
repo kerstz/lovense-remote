@@ -1,6 +1,6 @@
 # Privacy policy
 
-*Last updated: 2026-10-16 · applies to the Android app `com.edge2.remote`.*
+*Last updated: 2026-11-11 · applies to the Android app `com.edge2.remote`.*
 
 **Français ci-dessous.**
 
@@ -32,8 +32,10 @@ the app deletes it.
 
 Sharing is off by default and always started by you. A share uses a secret
 link, a 6-digit PIN, your approval for each controller, and expires after
-30 minutes. When control stops (sharing stopped or expired, a controller
-leaves or is removed, STOP tile), the toys are stopped.
+30 minutes. Someone who has the link and the PIN but whom you have not
+approved yet receives nothing about your toys (not even their names). When
+control stops (sharing stopped or expired, a controller leaves or is removed,
+STOP tile), the toys are stopped.
 
 - **Same Wi-Fi (LAN)**: the controller's browser talks directly to your phone.
   This traffic is **not encrypted** (`http://` / `ws://`): someone on the same
@@ -65,7 +67,7 @@ use the private channel described in [SECURITY.md](SECURITY.md).
 
 # Politique de confidentialité
 
-*Dernière mise à jour : 2026-10-16 · application Android `com.edge2.remote`.*
+*Dernière mise à jour : 2026-11-11 · application Android `com.edge2.remote`.*
 
 ## En bref
 
@@ -94,9 +96,10 @@ désinstallation les supprime.
 ## Partage à distance
 
 Désactivé par défaut, toujours lancé par vous : lien secret, PIN à 6 chiffres,
-approbation de chaque contrôleur, expiration après 30 minutes. Quand le
-contrôle cesse (partage arrêté ou expiré, contrôleur parti ou exclu, tuile
-STOP), les jouets sont arrêtés.
+approbation de chaque contrôleur, expiration après 30 minutes. Une personne qui
+a le lien et le PIN mais que vous n'avez pas encore approuvée ne reçoit rien sur
+vos jouets (pas même leurs noms). Quand le contrôle cesse (partage arrêté ou
+expiré, contrôleur parti ou exclu, tuile STOP), les jouets sont arrêtés.
 
 - **Même Wi-Fi (LAN)** : le navigateur du contrôleur parle directement à votre
   téléphone. Ce trafic **n'est pas chiffré** : une personne sur le même réseau

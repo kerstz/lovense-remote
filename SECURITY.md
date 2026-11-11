@@ -22,5 +22,38 @@ firmware itself.
 
 Only the latest release receives fixes.
 
-The threat model and mitigations are summarised in the
-[README](README.md#-security--privacy).
+## Threat model in short
+
+The mitigations are summarised in the [README](README.md#-security--privacy);
+the code lives in `app/src/main/java/com/edge2/remote/remote/`
+(`RemoteServer`, `ShareSecurity`, `RemoteController`, `SshTunnel`,
+`TofuHostKeyStore`) and every rule has a JVM test in `app/src/test/`.
+
+What an attacker needs to drive a toy: the secret link (128-bit id, new on every
+share), the 6-digit PIN (sent in the first WebSocket frame, never in a URL,
+5 failures burn the share server-side), **and** the host's explicit approval of
+that controller. Reconnection tokens are single use and revoked on kick, stop,
+expiry (30 min) and lockout. Pending controllers receive no host state.
+
+Known limits (by design, documented for users):
+
+- **Same-Wi-Fi sharing is cleartext HTTP/WS**: anyone on that network can read
+  the PIN, toy names and commands. The app tells users to share only on a
+  trusted network. There is no TLS because the LAN address is dynamic and no
+  certificate could be trusted by the controller's browser without a CA.
+- **Internet sharing terminates TLS at localhost.run**: the relay sees the
+  traffic (PIN, tokens, toy names, commands). It is opt-in behind a consent
+  dialog. The relay's SSH host key is trust-on-first-use: the very first
+  connection is not authenticated, every later one is (a changed key blocks the
+  tunnel until the user re-accepts it).
+- **Custom-scheme deep link** (`edge2remote://control?ws=…&pin=…`): Android
+  does not verify custom schemes, so another app installed on the controller's
+  phone could claim the scheme and receive the link + PIN. The host's approval
+  is still required; the parameters are strictly validated and the user must
+  confirm the host before any connection.
+- **Resume tokens are bearer credentials** for the duration of a share: a token
+  stolen in transit by the relay can be used once, and only until the host kicks
+  the extra controller (which it sees in its list).
+- **Full BouncyCastle replaces Android's stripped "BC" provider** process-wide
+  (needed for the SSH key exchange); the SSH private key is stored in
+  app-private storage, not in the Android Keystore.
