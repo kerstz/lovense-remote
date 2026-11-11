@@ -1,6 +1,8 @@
 package com.edge2.remote.remote
 
 import java.io.File
+import java.io.IOException
+import java.nio.file.Files
 import java.nio.ByteBuffer
 import java.security.KeyPairGenerator
 import java.security.MessageDigest
@@ -9,6 +11,7 @@ import java.util.Base64
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -42,6 +45,29 @@ class TofuHostKeyStoreTest {
         assertTrue(store.verify("SHA256:bbb"))
         assertEquals("SHA256:bbb", store.known())
         assertFalse(store.verify("SHA256:aaa")) // the old key is gone for good
+    }
+
+    @Test fun readErrorIsNotAFirstUseAndWriteErrorIsReported() {
+        // Unreadable store (here: a directory where the file should be) → refusal, the pin is not overwritten.
+        val dir = Files.createTempDirectory("tofu").toFile()
+        val unreadable = File(dir, "lhr_known_host").also { it.mkdir() }
+        val store = TofuHostKeyStore(unreadable)
+        assertThrows(IOException::class.java) { store.verify("SHA256:evil") }
+        assertTrue(unreadable.isDirectory)
+        // Store that cannot be written (missing parent directory) → the failure surfaces.
+        val unwritable = TofuHostKeyStore(File(dir, "missing/lhr_known_host"))
+        assertThrows(IOException::class.java) { unwritable.verify("SHA256:aaa") }
+        assertNull(unwritable.known())
+        dir.deleteRecursively()
+    }
+
+    @Test fun emptyStoreIsRefusedNotTreatedAsFirstUse() {
+        val (store, file) = tempStore()
+        file.writeText("")
+        assertFalse(store.verify("SHA256:aaa"))
+        assertTrue(store.mismatch.value) // the user can still explicitly re-accept
+        store.trustNew()
+        assertTrue(store.verify("SHA256:aaa"))
     }
 
     @Test fun fingerprintMatchesOpenSshFormat() {

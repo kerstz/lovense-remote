@@ -1,6 +1,7 @@
 package com.edge2.remote.remote
 
 import java.io.File
+import java.io.IOException
 import java.security.MessageDigest
 import java.security.PublicKey
 import java.util.Base64
@@ -24,19 +25,43 @@ class TofuHostKeyStore(private val file: File) {
     /** true if the relay host key CHANGED (possible interception) → tunnel refused. */
     val mismatch: StateFlow<Boolean> = _mismatch.asStateFlow()
 
-    /** The remembered fingerprint, or null before the first connection. */
-    fun known(): String? = runCatching { file.readText().trim() }.getOrNull()?.takeIf { it.isNotEmpty() }
+    /**
+     * The remembered fingerprint, or null ONLY if nothing was ever remembered
+     * (file absent). Any other read error throws: a transient I/O failure must
+     * never be mistaken for a first use, which would overwrite the pinned key.
+     */
+    @Throws(IOException::class)
+    fun known(): String? {
+        if (!file.exists()) return null
+        return file.readText().trim()
+    }
 
-    /** true if [fingerprint] is the remembered key (or the first one ever seen, which is then remembered). */
+    /**
+     * true if [fingerprint] is the remembered key, or the first one ever seen
+     * (then remembered). Throws [IOException] if the store cannot be read, or if
+     * a first key cannot be persisted — the caller must refuse the connection.
+     */
+    @Throws(IOException::class)
     fun verify(fingerprint: String): Boolean {
         val known = known()
         if (known == null) {
-            runCatching { file.writeText(fingerprint) }
+            persist(fingerprint)
             return true
         }
         if (known == fingerprint) return true
+        // Different key — or an unreadable, empty store: refused, and the user may re-accept.
         _mismatch.value = true
         return false
+    }
+
+    /** Atomic write (temp file + rename): a crash can't leave a half-written pin behind. */
+    private fun persist(fingerprint: String) {
+        val tmp = File(file.parentFile, file.name + ".tmp")
+        tmp.writeText(fingerprint)
+        if (!tmp.renameTo(file)) {
+            tmp.delete()
+            throw IOException("cannot persist the relay host key to $file")
+        }
     }
 
     /** The user explicitly accepts a new key (legitimate change on the relay's side): forget the old one. */

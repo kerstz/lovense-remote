@@ -115,8 +115,12 @@ class SshTunnel(context: Context, private val scope: CoroutineScope) {
 
     private val tofuVerifier = object : HostKeyVerifier {
         override fun verify(hostname: String, port: Int, key: PublicKey): Boolean {
-            val ok = hostKeys.verify(TofuHostKeyStore.fingerprint(key))
-            if (!ok) android.util.Log.w("SshTunnel", "relay host key changed — connection refused")
+            // Store unreadable / not writable: refuse this attempt (retried later) rather than
+            // trusting an unpinned key.
+            val ok = runCatching { hostKeys.verify(TofuHostKeyStore.fingerprint(key)) }
+                .onFailure { android.util.Log.w("SshTunnel", "host key store error — connection refused: ${it.message}") }
+                .getOrDefault(false)
+            if (!ok) android.util.Log.w("SshTunnel", "relay host key not verified — connection refused")
             return ok
         }
 
