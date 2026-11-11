@@ -29,7 +29,7 @@ jobs:
       - uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4
 
       # Also validates gradle-wrapper.jar against the official checksums.
-      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6
 
       - name: Unit tests
         run: ./gradlew :app:testDebugUnitTest --no-daemon
@@ -74,7 +74,7 @@ jobs:
           distribution: temurin
           java-version: '17'
       - uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4
-      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6
       - name: Write app/gradle.lockfile
         run: |
           ./gradlew -I tools/lockfile.init.gradle.kts :app:dependencies --write-locks \
