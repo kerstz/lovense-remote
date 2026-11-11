@@ -9,11 +9,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) · [SemVer](htt
 - Toys stop when remote control ends: last approved controller gone or kicked, sharing stopped, expired or locked out. The STOP tile also stops sharing.
 - A failed BLE write (including STOP) is retried with back-off; the keepalive re-sends the desired state and never an old non-zero level.
 - Lockout is enforced by the server itself: after 5 wrong codes every attempt (right code included) and the page are refused until a new share; the host is told once.
-- Resume tokens are single use: each reconnection burns the token and issues a new one, so a token copied in transit (e.g. by the relay) cannot be replayed.
+- Resume tokens rotate on every reconnection and the old one is burnt once the controller acknowledges the new one (`ACK:<token>`), so a token copied in transit (e.g. by the relay) cannot be replayed, and a lost `TOKEN` frame no longer strands the controller in "pending".
 - The `Origin` check also requires the same port: another local server on the phone is a different origin.
 - Pending (not yet approved) controllers no longer receive the host state (toy names).
 - The control page's fonts are only served behind the secret link; `/font/` is gone, so a LAN scanner can no longer detect the app.
-- Controller mode: a resume token is never offered to a different host, and reconnection stops after ~1 minute without an answer.
+- Controller mode: a resume token is never offered to a different host (but is kept on a retry to the same one), and reconnection stops after ~1 minute without an answer, showing "Host unreachable" with a Retry button instead of "Access denied".
+- Relay host-key store: only a missing file counts as a first use; a read error or an unwritable store refuses the connection instead of overwriting the pinned key.
 
 ### Privacy
 - Internet sharing through localhost.run is now opt-in, with an explicit consent dialog.
@@ -26,11 +27,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) · [SemVer](htt
 - `kotlinx-serialization-json` aligned to 1.11.0 (the version Ktor 3.6 already resolves).
 - `CHANGE_NETWORK_STATE` declared (foreground-service prerequisite on API 34+).
 - F-Droid metadata updated to 0.2.1.
-- SECURITY.md documents the threat model and its known limits (cleartext LAN, relay sees traffic, TOFU first connection, custom-scheme deep link); READMEs and privacy policy aligned.
+- SECURITY.md documents the threat model and its known limits (cleartext LAN, relay sees traffic, TOFU first connection, custom-scheme deep link, per-share PIN lockout usable for denial of service); READMEs and privacy policy aligned.
 
 ### Added
-- Tests: controller mode end to end against the embedded server, trust-on-first-use host-key store, server-side lockout, single-use resume tokens, link-gated fonts, `Origin` port check.
-- `.gitleaks.toml` allow-listing the public signing-certificate fingerprint used by F-Droid.
+- Tests: controller mode end to end against the embedded server, trust-on-first-use host-key store, server-side lockout, ACK-gated resume-token rotation (lost `TOKEN` frame, replay after ACK), unreachable host and retry, host-key store I/O errors, link-gated fonts, `Origin` port check.
+- `.gitleaks.toml` allow-listing exactly the public signing-certificate fingerprint used by F-Droid (by value, not by file).
 
 ## [0.2.1] - 2026-10-16
 
