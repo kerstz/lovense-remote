@@ -153,7 +153,8 @@ Knowing the link is never enough to control your toys:
   you start a new share.
 - **Your approval, per person** — you accept (or kick) each controller
   individually; until you accept, a controller sees nothing (not even your toy
-  names). Reconnection tokens are single use, so a copy can't be replayed.
+  names). Reconnection tokens rotate (the old one is burnt once the new one is
+  acknowledged), so a copy can't be replayed.
 - **Hardened web page** — strict CSP, anti-framing, `Origin` check (same host
   *and* port) against cross-site WebSocket hijacking, small frames, rate
   limiting, max 3 sockets, 10 s to authenticate.

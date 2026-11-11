@@ -32,8 +32,9 @@ the code lives in `app/src/main/java/com/edge2/remote/remote/`
 What an attacker needs to drive a toy: the secret link (128-bit id, new on every
 share), the 6-digit PIN (sent in the first WebSocket frame, never in a URL,
 5 failures burn the share server-side), **and** the host's explicit approval of
-that controller. Reconnection tokens are single use and revoked on kick, stop,
-expiry (30 min) and lockout. Pending controllers receive no host state.
+that controller. Reconnection tokens rotate on every resume (the old one is
+burnt as soon as the controller acknowledges the new one) and are revoked on
+kick, stop, expiry (30 min) and lockout. Pending controllers receive no host state.
 
 Known limits (by design, documented for users):
 
@@ -52,8 +53,16 @@ Known limits (by design, documented for users):
   is still required; the parameters are strictly validated and the user must
   confirm the host before any connection.
 - **Resume tokens are bearer credentials** for the duration of a share: a token
-  stolen in transit by the relay can be used once, and only until the host kicks
-  the extra controller (which it sees in its list).
+  stolen in transit by the relay stays usable until the controller acknowledges
+  its replacement (normally milliseconds; longer if the `TOKEN` frame is lost,
+  so that a legitimate controller is not stranded in "pending"), and only until
+  the host kicks the extra controller (which it sees in its list).
+- **The PIN lockout is per share, not per client**: 5 wrong PINs from anyone who
+  has the link burn the share for everybody, the legitimate controller
+  included. Whoever holds the link can therefore deny service (not take
+  control); the host simply starts a new share (new link + PIN). This trade-off
+  is deliberate: per-client counters could be bypassed by changing IP through
+  the relay.
 - **Full BouncyCastle replaces Android's stripped "BC" provider** process-wide
   (needed for the SSH key exchange); the SSH private key is stored in
   app-private storage, not in the Android Keystore.

@@ -156,8 +156,9 @@ Connaître le lien ne suffit jamais pour piloter tes toys :
   compris, jusqu'à un nouveau partage.
 - **Ton accord, pour chaque personne** — tu acceptes (ou éjectes) chaque
   contrôleur individuellement ; tant que tu n'as pas accepté, un contrôleur ne
-  voit rien (pas même le nom de tes toys). Les jetons de reconnexion sont à
-  usage unique : une copie ne peut pas être rejouée.
+  voit rien (pas même le nom de tes toys). Les jetons de reconnexion tournent
+  (l'ancien est brûlé dès que le nouveau est acquitté) : une copie ne peut pas
+  être rejouée.
 - **Page web durcie** — CSP stricte, anti-iframe, contrôle de l'`Origin` (même
   hôte *et* même port) contre le détournement de WebSocket, petites trames,
   limitation de débit, 3 sockets max, 10 s pour s'authentifier.
