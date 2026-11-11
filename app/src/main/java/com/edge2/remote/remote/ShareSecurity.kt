@@ -27,8 +27,10 @@ object ShareSecurity {
 
     /**
      * Guards against cross-site WebSocket hijacking: browsers always send
-     * `Origin`; it must name the same host as `Host` (the page we served).
-     * No `Origin` = native client (the app) → accepted, the PIN is still required.
+     * `Origin`; it must name the same host **and port** as `Host` (the page we
+     * served) — another local server on the same address (other app, other
+     * port) is a different origin. No `Origin` = native client (the app) →
+     * accepted, the PIN is still required.
      */
     fun originAllowed(origin: String?, host: String?): Boolean {
         if (origin == null) return true
@@ -36,15 +38,27 @@ object ShareSecurity {
         val o = runCatching { URI(origin) }.getOrNull() ?: return false
         if (o.scheme !in setOf("http", "https")) return false
         val oh = o.host?.lowercase()?.removeSurrounding("[", "]") ?: return false
-        val h = hostOnly(host)
-        return oh == h
+        if (oh != hostOnly(host)) return false
+        val originPort = if (o.port == -1) defaultPort(o.scheme) else o.port
+        // `Host` without a port = the scheme's default (the tunnel terminates TLS,
+        // so the scheme is only known from `Origin`).
+        return originPort == (portOf(host) ?: defaultPort(o.scheme))
     }
+
+    private fun defaultPort(scheme: String): Int = if (scheme == "https") 443 else 80
 
     /** `Host` → bare hostname (no port, handles bracketed IPv6). */
     internal fun hostOnly(host: String): String {
         val v = host.trim().lowercase()
         if (v.startsWith("[")) return v.substringAfter('[').substringBefore(']')
         return v.substringBefore(':')
+    }
+
+    /** `Host` → explicit port, or null when absent (handles bracketed IPv6). */
+    internal fun portOf(host: String): Int? {
+        val v = host.trim()
+        val rest = if (v.startsWith("[")) v.substringAfter(']', "") else v
+        return rest.substringAfter(':', "").toIntOrNull()?.takeIf { it in 1..65535 }
     }
 
     /** Base64 SHA-256 hash of an inline script (for the CSP `script-src`). */

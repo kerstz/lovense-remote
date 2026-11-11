@@ -42,6 +42,23 @@ class ShareSecurityTest {
         assertFalse(ShareSecurity.originAllowed("http://a.b", null))
     }
 
+    @Test fun originMustMatchPortToo() {
+        // Another app's local server on the phone is a different origin.
+        assertFalse(ShareSecurity.originAllowed("http://192.168.1.5:8080", "192.168.1.5:8787"))
+        assertFalse(ShareSecurity.originAllowed("http://192.168.1.5", "192.168.1.5:8787"))
+        assertTrue(ShareSecurity.originAllowed("http://[fe80::1]:8787", "[fe80::1]:8787"))
+        assertFalse(ShareSecurity.originAllowed("http://[fe80::1]:8080", "[fe80::1]:8787"))
+        // Through the tunnel the Host has no port: the scheme's default is implied.
+        assertTrue(ShareSecurity.originAllowed("https://abc.lhr.life:443", "abc.lhr.life"))
+        assertTrue(ShareSecurity.originAllowed("https://abc.lhr.life", "abc.lhr.life:443"))
+        assertFalse(ShareSecurity.originAllowed("https://abc.lhr.life:8443", "abc.lhr.life"))
+        assertEquals(8787, ShareSecurity.portOf("192.168.1.5:8787"))
+        assertEquals(8787, ShareSecurity.portOf("[::1]:8787"))
+        assertNull(ShareSecurity.portOf("abc.lhr.life"))
+        assertNull(ShareSecurity.portOf("[::1]"))
+        assertNull(ShareSecurity.portOf("host:notaport"))
+    }
+
     @Test fun rateLimiterCapsBurstThenRefills() {
         var now = 0L
         val rl = RateLimiter(perSecond = 10.0, burst = 5.0) { now }
