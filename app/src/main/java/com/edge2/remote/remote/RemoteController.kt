@@ -28,7 +28,11 @@ import kotlinx.serialization.json.jsonPrimitive
  * Opened by a deep link `edge2remote://control?ws=…&pin=…` (checked by
  * [validateWsUrl], then confirmed by the user before any connection).
  */
-class RemoteController(private val scope: CoroutineScope) {
+class RemoteController(
+    private val scope: CoroutineScope,
+    private val reconnectDelayMs: Long = RECONNECT_DELAY_MS,
+    private val maxReconnects: Int = MAX_RECONNECTS,
+) {
 
     enum class Phase { CONNECTING, WAITING, LIVE, DENIED }
 
@@ -54,7 +58,11 @@ class RemoteController(private val scope: CoroutineScope) {
 
     fun connect(wsUrl: String, pin: String) {
         disconnect()
+        // A resume token is bound to one host's share: never offer it to another host.
+        token = null
+        _phase.value = Phase.CONNECTING
         job = scope.launch {
+            var failures = 0 // consecutive attempts without a single frame from the host
             while (isActive && _phase.value != Phase.DENIED) {
                 _phase.value = Phase.CONNECTING
                 runCatching {
@@ -70,6 +78,7 @@ class RemoteController(private val scope: CoroutineScope) {
                         }
                         try {
                             for (frame in incoming) {
+                                failures = 0
                                 if (frame is Frame.Text) onMessage(frame.readText())
                             }
                         } finally {
@@ -78,8 +87,11 @@ class RemoteController(private val scope: CoroutineScope) {
                     }
                 }
                 if (_phase.value != Phase.DENIED) {
+                    // The host stopped sharing (or is unreachable): give up after ~1 min
+                    // instead of knocking forever.
+                    if (++failures >= maxReconnects) { _phase.value = Phase.DENIED; break }
                     _phase.value = Phase.CONNECTING
-                    delay(1_500) // reconnect (with the resume token if approved)
+                    delay(reconnectDelayMs) // reconnect (with the resume token if approved)
                 }
             }
         }
@@ -126,6 +138,10 @@ class RemoteController(private val scope: CoroutineScope) {
     }
 
     companion object {
+        /** Reconnection attempts (1.5 s apart) tolerated without any answer from the host. */
+        const val MAX_RECONNECTS = 40
+        const val RECONNECT_DELAY_MS = 1_500L
+
         /**
          * Only accepts a `ws(s)://host[:port]/ws/<id>` URL — a third-party site
          * can't make us open arbitrary endpoints through the deep link.
