@@ -169,8 +169,10 @@ class RemoteServerTest {
             assertNotNull(fresh)
             assertNotEquals(token, fresh)
             assertTrue(next()!!.startsWith("STATE:{\"approved\":true"))
+            send(Frame.Text("ACK:$fresh")) // the controller stored the new token
+            delay(200) // the ACK is processed asynchronously
         }
-        // The token was single use: a replay (e.g. by the relay) is back to pending.
+        // Rotation acknowledged: a replay of the old token (e.g. by the relay) is back to pending.
         client.webSocket(ws) {
             send(Frame.Text("AUTH:${server.pin}:$token"))
             assertTrue(next()!!.startsWith("STATE:{\"approved\":false"))
@@ -183,6 +185,45 @@ class RemoteServerTest {
         // The fresh token is the valid one.
         client.webSocket(ws) {
             send(Frame.Text("AUTH:${server.pin}:$fresh"))
+            assertTrue(next()!!.startsWith("TOKEN:"))
+            assertTrue(next()!!.startsWith("STATE:{\"approved\":true"))
+        }
+    }
+
+    @Test fun lostTokenFrameStillResumesAndReplayFailsAfterAck() = runBlocking {
+        var first: String? = null
+        client.webSocket(ws) {
+            send(Frame.Text("AUTH:${server.pin}"))
+            next()
+            server.approve(server.controllers.value.single().id)
+            first = next()?.removePrefix("TOKEN:")
+            assertNotNull(first)
+            next()
+        }
+        // Resume, but the TOKEN frame "never arrives": the client drops it and sends no ACK.
+        client.webSocket(ws) {
+            send(Frame.Text("AUTH:${server.pin}:$first"))
+            assertTrue(next()!!.startsWith("TOKEN:")) // lost on the way
+            assertTrue(next()!!.startsWith("STATE:{\"approved\":true"))
+        }
+        // The client still only knows the first token: it must resume, not stay pending forever.
+        var second: String? = null
+        client.webSocket(ws) {
+            send(Frame.Text("AUTH:${server.pin}:$first"))
+            second = next()?.removePrefix("TOKEN:")
+            assertNotNull(second)
+            assertTrue(next()!!.startsWith("STATE:{\"approved\":true"))
+            send(Frame.Text("ACK:$second"))
+            delay(200)
+        }
+        // After the ACK, a real replay of the old token fails …
+        client.webSocket(ws) {
+            send(Frame.Text("AUTH:${server.pin}:$first"))
+            assertTrue(next()!!.startsWith("STATE:{\"approved\":false"))
+        }
+        // … and the acknowledged one still works.
+        client.webSocket(ws) {
+            send(Frame.Text("AUTH:${server.pin}:$second"))
             assertTrue(next()!!.startsWith("TOKEN:"))
             assertTrue(next()!!.startsWith("STATE:{\"approved\":true"))
         }

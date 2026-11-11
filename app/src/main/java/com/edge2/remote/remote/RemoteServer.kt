@@ -51,9 +51,13 @@ data class ControllerInfo(val id: Int, val approved: Boolean)
  *  3. **Host approval PER controller**: an authenticated controller stays
  *     "pending" (commands ignored, host state hidden) until the host approves
  *     THAT controller. Once approved, a resume token lets it reconnect (network
- *     blip) without asking again. The token is **single use**: each resume
- *     burns it and issues a new one, so a copy captured in transit (e.g. by the
- *     relay) cannot be replayed; kicking the controller ([kick]) revokes it.
+ *     blip) without asking again. Tokens **rotate on every resume** and the
+ *     rotation is **gated by an ACK**: the controller answers `ACK:<new>` once it
+ *     has stored the new token, and only then is the presented one burnt. So a
+ *     lost `TOKEN` frame does not strand the controller in "pending", while a
+ *     copy captured in transit (e.g. by the relay) cannot be replayed once the
+ *     rotation is acknowledged. At most two tokens (presented + fresh) are live
+ *     per controller; kicking the controller ([kick]) revokes both.
  *  4. **Anti-CSWSH**: `Origin` must name our own host *and* port.
  *  5. **Anti-DoS**: frames ≤ 256 B, rate limiting, max 3 sockets,
  *     authentication within 10 s, pending approval ≤ 2 min.
@@ -105,9 +109,12 @@ class RemoteServer(
 
     private class Session(val id: Int, val ws: DefaultWebSocketServerSession) {
         val approved = AtomicBoolean(false)
-        /** Resume token tied to this controller (revoked when it is kicked). */
-        @Volatile var token: String? = null
+        /** Resume grant of this controller (revoked when it is kicked). */
+        @Volatile var grant: Grant? = null
     }
+
+    /** The live resume tokens of one approved controller: at most the presented one + a fresh one. */
+    private class Grant { val tokens = LinkedHashSet<String>() }
 
     private val sessions = ConcurrentHashMap<Int, Session>()
     private val nextId = AtomicInteger(1)
@@ -115,8 +122,9 @@ class RemoteServer(
     /** Set after [MAX_PIN_FAILURES]: the share is burnt until the next [start]. */
     private val lockedOut = AtomicBoolean(false)
     private val openSockets = AtomicInteger(0)
-    /** Resume tokens issued to approved controllers (valid once, for this session). */
-    private val resumeTokens = ConcurrentHashMap.newKeySet<String>()
+    /** Live resume tokens → their grant, for this share. Guarded by [tokenLock]. */
+    private val resumeTokens = HashMap<String, Grant>()
+    private val tokenLock = Any()
 
     /** Latest state (toys, …) pushed to controllers, as JSON. */
     @Volatile private var lastState: String = "{}"
@@ -144,7 +152,7 @@ class RemoteServer(
         pin = ShareSecurity.pin(6)
         failedPins.set(0)
         lockedOut.set(false)
-        resumeTokens.clear()
+        synchronized(tokenLock) { resumeTokens.clear() }
         // Pre-check: if an address can't be bound (network blocked, port taken),
         // do NOT start Ktor — its bind failure also leaks as an uncaught
         // exception on a coroutine thread, which would crash the app.
@@ -236,20 +244,18 @@ class RemoteServer(
                 close(policy)
                 return
             }
-            // Resume token: constant-time lookup, then atomically burnt (single use).
-            val resumed = parts.getOrNull(1)?.let { tok ->
-                resumeTokens.firstOrNull { ShareSecurity.constantTimeEquals(it, tok) }?.takeIf { resumeTokens.remove(it) }
-            }
+            // Resume token: constant-time lookup, then rotation (the old one dies on ACK).
+            val resumed = parts.getOrNull(1)?.let { resume(it) }
 
             // 2. Registration: pending approval (unless resuming an approved controller).
             val s = Session(nextId.getAndIncrement(), this)
             if (resumed != null) {
                 s.approved.set(true)
-                s.token = issueToken()
+                s.grant = resumed.first
             }
             sessions[s.id] = s
             publish()
-            s.token?.let { outgoing.send(Frame.Text("TOKEN:$it")) }
+            resumed?.let { outgoing.send(Frame.Text("TOKEN:${it.second}")) }
             outgoing.send(Frame.Text("STATE:" + stateFor(s)))
             val approvalTimeout = launch {
                 delay(120_000)
@@ -266,8 +272,10 @@ class RemoteServer(
                     if (frame !is Frame.Text) continue
                     if (!limiter.take()) { if (++dropped > 300) break; continue }
                     dropped = 0
+                    val text = frame.readText()
+                    if (text.startsWith("ACK:")) { s.grant?.let { acknowledge(it, text.removePrefix("ACK:")) }; continue }
                     if (!s.approved.get()) continue
-                    RemoteCommand.parse(frame.readText())?.let { onCommand(s.id, it) }
+                    RemoteCommand.parse(text)?.let { onCommand(s.id, it) }
                 }
             } finally {
                 approvalTimeout.cancel()
@@ -280,15 +288,45 @@ class RemoteServer(
         }
     }
 
-    /** New resume token, registered as valid for this share. */
-    private fun issueToken(): String = ShareSecurity.token(16).also { resumeTokens += it }
+    /** New resume token added to [grant]. Caller holds [tokenLock]. */
+    private fun issueToken(grant: Grant): String =
+        ShareSecurity.token(16).also { grant.tokens += it; resumeTokens[it] = grant }
+
+    /** Keeps only [keep] alive in [grant]. Caller holds [tokenLock]. */
+    private fun retainOnly(grant: Grant, keep: String?) {
+        grant.tokens.filter { it != keep }.forEach { resumeTokens.remove(it); grant.tokens.remove(it) }
+    }
+
+    /**
+     * Resume with [presented]: if it is live, rotates. The presented token stays
+     * valid until the fresh one is acknowledged ([acknowledge]) — in case the
+     * `TOKEN` frame is lost — and any other token of the grant (issued after it,
+     * so never received) dies now: at most two live tokens per controller.
+     */
+    private fun resume(presented: String): Pair<Grant, String>? = synchronized(tokenLock) {
+        val match = resumeTokens.keys.firstOrNull { ShareSecurity.constantTimeEquals(it, presented) } ?: return null
+        val grant = resumeTokens.getValue(match)
+        retainOnly(grant, match)
+        grant to issueToken(grant)
+    }
+
+    /** The controller confirmed it stored [tok]: every other token of [grant] is burnt. */
+    private fun acknowledge(grant: Grant, tok: String) = synchronized(tokenLock) {
+        val match = grant.tokens.firstOrNull { ShareSecurity.constantTimeEquals(it, tok) } ?: return
+        retainOnly(grant, match)
+    }
+
+    private fun revoke(grant: Grant?) {
+        if (grant != null) synchronized(tokenLock) { retainOnly(grant, null) }
+    }
 
     /** The host approves controller [id]: commands allowed + resume token. */
     fun approve(id: Int) {
         val s = sessions[id] ?: return
         if (!s.approved.compareAndSet(false, true)) return
-        val tok = issueToken()
-        s.token = tok
+        val grant = Grant()
+        val tok = synchronized(tokenLock) { issueToken(grant) }
+        s.grant = grant
         s.ws.launch {
             runCatching {
                 s.ws.outgoing.send(Frame.Text("TOKEN:$tok"))
@@ -301,7 +339,7 @@ class RemoteServer(
     /** The host refuses / kicks controller [id] (the others stay connected). */
     fun kick(id: Int) {
         val s = sessions.remove(id) ?: return
-        s.token?.let { resumeTokens.remove(it) }
+        revoke(s.grant)
         s.ws.launch {
             runCatching { s.ws.outgoing.send(Frame.Text("DENIED")) }
             s.ws.close(CloseReason(CloseReason.Codes.VIOLATED_POLICY, ""))
@@ -334,7 +372,7 @@ class RemoteServer(
         val e = engine
         engine = null
         sessions.clear()
-        resumeTokens.clear()
+        synchronized(tokenLock) { resumeTokens.clear() }
         _controllers.value = emptyList()
         sessionId = ""
         pin = ""

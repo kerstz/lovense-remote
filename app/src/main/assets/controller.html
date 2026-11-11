@@ -249,7 +249,7 @@
     ws.onmessage = function (e) {
       var m = String(e.data);
       if (m === 'DENIED') { denied = true; return; }
-      if (m.indexOf('TOKEN:') === 0) { token = m.slice(6); return; }
+      if (m.indexOf('TOKEN:') === 0) { token = m.slice(6); ws.send('ACK:' + token); return; }
       if (m.indexOf('STATE:') === 0) {
         var st; try { st = JSON.parse(m.slice(6)); } catch (x) { return; }
         approved = !!st.approved;
